@@ -43,7 +43,6 @@ r_0=0.025 # [um]
 C_p=1.0 # [at%]
 C_0=0.0  # [at]      
 C_i = C_star*np.exp(-DeltaH/(R*T_i))
-print(C_i,"NEEEI", np.exp(-DeltaH))
 
 #Diffusivity for T_i
 D_1 = D_0*np.exp(-Q/(R*T_i))
