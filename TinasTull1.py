@@ -29,21 +29,21 @@ start_time = time.time()
 pi = np.pi
 R = 8.314 # [J/(K*mol)] Univ. Gas Constant  
 NA = 6.022*10**23 # Avogadro's constant, [particles/mol]
+"Isothermal annealing at T = 400 [C]"
 T_K = 273.15 # Deg K at 0 deg C
+T_i = 400.0+T_K # [K]
 
 "From table 1 in Bjørneklett"
 C_star=2.17*1e3 # wt%
-DeltaH=50.8*1e6 # [J/mol]
+DeltaH=50.8*1e3 # [J/mol]
 D_0 = 3.46*1e7 # [um^2*s^-1]
 Q = 123.8*1e3 # [J/mol]
 B_0=0.001 # [um]
 r_0=0.025 # [um]
 C_p=1.0 # [at%]
 C_0=0.0  # [at]      
-
-"Isothermal annealing at T = 400 [C]"
-T_K = 273.15 # Deg K at 0 deg C
-T_i = 400.0+T_K # [K]
+C_i = C_star*np.exp(-DeltaH/(R*T_i))
+print(C_i,"NEEEI", np.exp(-DeltaH))
 
 #Diffusivity for T_i
 D_1 = D_0*np.exp(-Q/(R*T_i))
@@ -69,12 +69,13 @@ alpha = .4  # alpha = D*dt/dx**2 --> Const in discretisation --> Must be <= 0.5 
 def Diffusivity(T):
     return D_0*np.exp(-Q/(R*T))
 
-def k_fun(C_i):
-    return 2*(C_i-C_0)/(C_p-C_0)
+def k_fun(C_it):
+    return 2*(C_it-C_0)/(C_p-C_0)
     
 def Bf(k,t,D):
     return 1-k*(np.sqrt((D*t)/pi))/B_0
-
+print(D_1,k_fun(C_i))
+print(pi/D_1*B_0**2/k_fun(C_i))
 
 #Calculate the concentration on the particle surface at the temperature T_i
 def Csurf(T):
@@ -86,7 +87,6 @@ def Csurf(T):
 #    return Csurf(T)-(Csurf(T)-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
 def C(x,r,T,D,t):
     if((x-dx/2) <= r):
-        print(x)
         return C_p
     return C_p-(C_p-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
             
@@ -241,7 +241,7 @@ def main(argv):
     analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
     finite_diff() # Calc and plot concentration profiles, finite differences
     #Plate_thickness()    
-    plt.show()
+ #   plt.show()
 #    fin_diff_wLin_Temp_profile_Cu() # Calc and plot concentration profile for Cu, linear temp. increase
     
 #    stabilityCheck(analytical,fin_diff) # Comparison analytical and finite differences
