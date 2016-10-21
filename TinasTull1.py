@@ -17,6 +17,7 @@ Project 2, Part 2A
 import sys
 import numpy as np
 import scipy.sparse
+import scipy.special
 from matplotlib import pyplot as plt
 import math
 import time
@@ -33,10 +34,10 @@ T_K = 273.15 # Deg K at 0 deg C
 "From table 1 in Bjørneklett"
 C_star=2.17*1e3 # wt%
 DeltaH=50.8*1e6 # [J/mol]
-D_0 = 3.46*1e7 # [ym^2*s^-1]
+D_0 = 3.46*1e7 # [um^2*s^-1]
 Q = 123.8*1e3 # [J/mol]
-B_0=0.001 # [ym]
-r_0=0.025 # [ym]
+B_0=0.001 # [um]
+r_0=0.025 # [um]
 C_p=1.0 # [at%]
 C_0=0.0  # [at]      
 
@@ -44,11 +45,15 @@ C_0=0.0  # [at]
 T_K = 273.15 # Deg K at 0 deg C
 T_i = 400.0+T_K # [K]
 
+#Diffusivity for T_i
+D_1 = D_0*np.exp(-Q/(R*T_i))
+
+
 "Spacial and temporal discretisation"
-N = 100 # Number of spacial partitions of bar
-L = 0.5 # [um] Length of barH = 30.0 
+N = 300 # Number of spacial partitions of bar
+L = 1.5 # [um] Length of barH = 30.0 
 #t_i = 0.1 # senconds for isothermal annealing
-t_i = 0.2 # senconds for isothermal annealing
+t_i = 12 # senconds for isothermal annealing
 #T1 = 1e3+T_K # [K] Temperature           
 T_1 = T_i # [K] Temperature           
 x_bar = np.linspace(0,L,N+1)
@@ -64,6 +69,12 @@ alpha = .4  # alpha = D*dt/dx**2 --> Const in discretisation --> Must be <= 0.5 
 def Diffusivity(T):
     return D_0*np.exp(-Q/(R*T))
 
+def k_fun(C_i):
+    return 2*(C_i-C_0)/(C_p-C_0)
+    
+def Bf(k,t,D):
+    return 1-k*(np.sqrt((D*t)/pi))/B_0
+
 
 #Calculate the concentration on the particle surface at the temperature T_i
 def Csurf(T):
@@ -74,7 +85,8 @@ def Csurf(T):
 #def C(x,r,T,D,t):
 #    return Csurf(T)-(Csurf(T)-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
 def C(x,r,T,D,t):
-    if((x+dx/2) < r):
+    if((x-dx/2) <= r):
+        print(x)
         return C_p
     return C_p-(C_p-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
             
@@ -85,10 +97,8 @@ print(C(3,r_0,T_i,Diffusivity(T_i),20))
 
  # Plot the analytical solution with constant diffusivity (D(x) = D = const.)
 def AnalConc():
-    #L = 0.5 # [ym]
     Conc = [C(i,r_0,T_i,Diffusivity(T_i),t_i) for i in x_bar]
             
-    #fig1 = plt.figure(figsize=(14,10),dpi=600)
     plt.plot(x_bar,Conc,',') #label='Si'
     plt.xlim(0, L)
     plt.ylim(0, 1.1)
@@ -97,41 +107,11 @@ def AnalConc():
     plt.title('Analytic concentration profile of Si  after %d seconds annealing at %d K' % (t_i, T_i))
     plt.legend(bbox_to_anchor=(0.2,1))
     plt.rcParams.update({'font.size': 18})
-    print(x_bar)
-    print(Conc)
-    
-    #plt.savefig('fig1.png',transparant=True)
     return Conc
     
     
-D_1=Diffusivity(T_i)
 
-def k_fun(C_i):
-    return 2*(C_i-C_0)/(C_p-C_0)
     
-def Bf(k,t,D):
-    print(1-k*(np.sqrt((D*t)/pi))/B_0)
-    return 1-k*(np.sqrt((D*t)/pi))/B_0
-    
-def plate_thickness(C_i, titt, nameIndex): # cannot use
-    #Thickness=[Bf(k(C(i,r_0,T_i,Diffusivity(T_i),t_i)),t_i,D_1) for i in x_bar]
-    Thickness=[Bf(k(C_i),t_itt,D_1) for t_itt in t]
-    plt.figure()
-    plt.plot(x_bar,Thickness,',') #label='Si'
-    plt.xlim(0, L)
-    plt.ylim(0, 1.1)
-    plt.xlabel('x [um]')
-    plt.ylabel('Normalized Plate thickness [mol/ym]')
-    plt.title('Normalized thickness of Si precipitate  after %d seconds annealing at %d K' % (t_i, T_i))
-    plt.legend(bbox_to_anchor=(0.2,1))
-    plt.rcParams.update({'font.size': 18})
-    plt.savefig("Plate_Thick{1}".format(nameIndex))
-    print(x_bar)
-    print(Conc)
-    plt.close()
-    
-    #plt.savefig('fig1.png',transparant=True)
-    return Thickness
 #def t_star(k,D): trenger ikke denne?... 
 #    return t_r*(k_r*B_0)**2*D_r/(D*(k*B_0r)**2)
     
@@ -163,62 +143,34 @@ def saveFig(xVecT,CVecT,timeT,figNameT):
 
 
 def finite_diff():
-    # Spatial discretisation
+    # Spatial discretisation is global
     # Temporal discretisation
-    dt = [alpha*dx**2/D_1]
-    # Since DNi1 is so small --> dt almost unconditionally stable
-    dt = alpha*dx**2/D_1        # Must then multiply with ratio D_Ni/D_Cu when calculating matrix
+    dt = alpha*dx**2/D_1
     Nt = math.ceil(t_i/dt)
     t = np.linspace(0, t_i, Nt) # mesh points in time
 
     # Create initial concentration vectors
-    #U = [np.append(np.zeros(int(N/2)),np.zeros(int(N/2)+1)+1), np.append(np.zeros(int(N/2)),np.zeros(int(N/2)+1)+1)] #[C0_Cu,C0_Ni]
-    #for i in U:
-    #    i[int(N/2)] = 0.5  # Since initial value is undefined at x = 0, we set it to 0.5 which also smoothens the graph
-    print(int(r_0/dx),int((L-r_0)/dx))
     U = np.append(np.zeros(int(r_0/dx)+1)+1,np.zeros(N-int((r_0)/dx)))
     U[int(r_0/dx)+1] = 0.5
-    print(np.size(U), N)
     
     # Create diag, sub and super diag for tridiag
-    #subsup = [np.zeros(N)+alpha, np.zeros(N)+alpha*D_1]      #sub and super is equivalent
-    #diag = [np.zeros(N+1)+1-2*alpha, np.zeros(N+1)+1-2*alpha*D_1]    #diagonal
-    #Sparse = [scipy.sparse.diags(np.array([i,j,i]), [-1,0,1]) for i, j in zip(subsup, diag)]
     subsup = np.zeros(N)+alpha      #sub and super is equivalent
     diag = np.zeros(N+1)+1-2*alpha    #diagonal
     Sparse = scipy.sparse.diags(np.array([subsup,diag,subsup]), [-1,0,1])
-    print(np.size(Sparse))
-    #fig2 = plt.figure(figsize=(14,10),dpi=600)
 
     #Solve for every timestep
-    j = 1
-    #plt.figure(3)
     plate_thickness_bar = np.zeros(np.size(t))
     for i in range(Nt):
         U = nextTimeSparse(U, Sparse)
         # Insert boundary conditions
-        for j in range(round(r_0/dx)):
-            U[j] = 1 # inf BC
+        for j in range(round(r_0/dx)+1):
+            U[j] = C_p # inf BC
         U[N] = 0
         plate_thickness_bar[i] = Bf(k_fun(C_p),dt*i,D_1)
     plt.plot(x_bar,U)
     plt.ylim(0,1.1)
     plt.figure()
     plt.plot(t, plate_thickness_bar)
-    print(D_1)
-    #plate_thickness(C_p,"9")
-                
-            
-    #plt.plot(x, CVec, label=metal)
-    #plt.figure(figsize=(14,10),dpi=120)
-    #plt.xlim(-1, 1)
-    #plt.ylim(0, 1.1)
-    #plt.xlabel('x [mm]')
-    #plt.ylabel('Concentration [mole/mm]')
-    #plt.title('Calculated concentration after %d hours annealing at %d degrees [K]' % (hours,T_anneal))
-#    plt.title('Concentration gradient after %.2f hours annealing at 1273 degrees K)' % (hours))
-    #plt.legend(bbox_to_anchor=(0.2,1))
-#    plt.savefig('figs/fig%i.png' % j,transparant=True)
             
 def fin_diff_wLin_Temp_profile_Cu():
     "With linear temperature profile"
