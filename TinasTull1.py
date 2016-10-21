@@ -34,11 +34,11 @@ T_K = 273.15 # Deg K at 0 deg C
 T_i = 400.0+T_K # [K]
 
 "From table 1 in Bjørneklett"
-C_star=2.17*1e3 # wt%
-DeltaH=50.8*1e3 # [J/mol]
-D_0 = 3.46*1e7 # [um^2*s^-1]
-Q = 123.8*1e3 # [J/mol]
-B_0=0.001 # [um]
+C_star=2.17e1 # wt%/100
+DeltaH=50.8e3 # [J/mol]
+D_0 = 3.46e7 # [um^2*s^-1]
+Q = 123.8e3 # [J/mol]
+B_0=1e-3 # [um]
 r_0=0.025 # [um]
 C_p=1.0 # [at%]
 C_0=0.0  # [at]      
@@ -52,7 +52,7 @@ D_1 = D_0*np.exp(-Q/(R*T_i))
 N = 300 # Number of spacial partitions of bar
 L = 1.5 # [um] Length of barH = 30.0 
 #t_i = 0.1 # senconds for isothermal annealing
-t_i = 12 # senconds for isothermal annealing
+t_i = 20 # senconds for isothermal annealing
 #T1 = 1e3+T_K # [K] Temperature           
 T_1 = T_i # [K] Temperature           
 x_bar = np.linspace(0,L,N+1)
@@ -73,8 +73,8 @@ def k_fun(C_it):
     
 def Bf(k,t,D):
     return 1-k*(np.sqrt((D*t)/pi))/B_0
-print(D_1,k_fun(C_i))
-print(pi/D_1*B_0**2/k_fun(C_i))
+print(C_i, np.sqrt(D_1),k_fun(C_i), "C_i, D_1, k")
+print(pi/D_1*B_0**2/k_fun(C_i)**2, "Tid")
 
 #Calculate the concentration on the particle surface at the temperature T_i
 def Csurf(T):
@@ -168,70 +168,60 @@ def finite_diff():
         for j in range(round(r_0/dx)+1):
             U[j] = C_p # inf BC
         U[N] = 0
-        plate_thickness_bar[i] = Bf(k_fun(C_p),dt*i,D_1)
+        relative_plate_thickness = Bf(k_fun(C_i),dt*i,D_1)
+        if (relative_plate_thickness > 0):
+            plate_thickness_bar[i] = relative_plate_thickness
     plt.plot(x_bar,U)
     plt.ylim(0,1.1)
     plt.figure()
     plt.plot(t, plate_thickness_bar)
             
-def NextB():     
-    dt=       
-    B = np.zeros(N+1)+B_0  
-    for i in range(Nt):     
-        B = B-dt*k_fun(C_p)*np.sqrt(D_1/(pi*dt*i))/2
-    plot(Nt,B)
 
-def fin_diff_wLin_Temp_profile_Cu():
-    "With linear temperature profile"
-    T1 = 700+T_K
-    T2 = 1000+T_K
+def fin_diff_two_step():
+    T1 = 400+T_K
+    T2 = 430+T_K
     
     # Spatial discretization
-    L = 2.0 # [mm]
-    x = np.linspace(-L/2, L/2, N+1) # Mesh points in space
-    dx = L/N
-    
     # Temporal discretisation
-    dt = alpha*dx**2/DCu1        # DCu1 will give the lowest dt, use it to be sure we respect the stability criterion
-    Nt = math.ceil(t_f/dt)
-    t = np.linspace(0, t_f, Nt+1) # Mesh points in time
+    D_low = Diffusivity(T1)
+    D_hi = Diffusivity(T2)
+    print(D_low/D_hi)
+    dt = alpha*dx**2/D_hi        # D_hi will give the lowest dt, use it to be sure we respect the stability criterion
+    Nt = math.ceil(t_i/dt)
+    t = np.linspace(0, t_i, Nt+1) # Mesh points in time
     
-    dT = 10.0*dt/3600.0 # Change in temperature as a function of time (timestep) not used for anything important
-    TempVec = np.linspace(T1,T2,Nt+1) # The temperature vector as a function of time (timestep)
-
  # Create initial concentration vectors
-    U = np.append(np.zeros(int(N/2)),np.zeros(int(N/2)+1)+1)
-    U[int(N/2)] = 0.5  # Since initial value is undefined at x = 0, we set it to 0.5 which also smoothens the graph
-    
-    # Solve for every timestep
-    j = 1
+    U = np.append(np.zeros(int(r_0/dx)+1)+1,np.zeros(N-int((r_0)/dx)))
+    U[int(r_0/dx)+1] = 0.5 # Since initial value is undefined at x = 0, we set it to 0.5 which also smoothens the graph
+
+    # Create diag, sub and super diag for tridiag
+    subsup = np.zeros(N)+alpha*D_low/D_hi      #sub and super is equivalent
+    diag = np.zeros(N+1)+1-2*alpha*D_low/D_hi    #diagonal
+    Sparse = scipy.sparse.diags(np.array([subsup,diag,subsup]), [-1,0,1])
+
+    #Solve for every timestep
+    plate_thickness_bar = np.zeros(np.size(t))
+    NotChanged = True
+    D_RPT = D_low
     for i in range(Nt):
-        DCuOfT = Diffusivity(D_0Cu,Q_Cu,TempVec[i])
-        ASparse = createSparse(DCuOfT)
-        U = nextTimeSparse(U, ASparse)
-        # Set boundary conditions (dC/dx = 0)
-        U[0] = U[1]
-        U[N] = U[N-1]
-        if (not i%50 and False): # Change to True to make many plots for animation
-            plt.figure(figsize=(14,10),dpi=600)
-            if (j/10<1):
-                figName = 'figs/fig0%i.png' % j
-            else:
-                figName = 'figs/fig%i.png' % j
-            saveFig(x,U,i*dt/3600,TempVec[i],figName)
-            plt.close()
-            j = j+1
-    fig3 = plt.figure(figsize=(14,10),dpi=600)
-    plt.plot(x, U, label='Cu')
-    plt.xlim(-1, 1)
-    plt.ylim(0, 1.1)
-    plt.xlabel('x [mm]')
-    plt.ylabel('Concentration [mol/mm]')
-    plt.title('Cu concentration profile after annealing with a linear temp. incr. from %d K to %d K over the course of %d hours' % (T1,T2,H))
-    #plt.title('Concentration gradient after %.2f hours annealing, temperature is %.2f K)' % (H,T2))
-    plt.legend(bbox_to_anchor=(0.2,1))
-    plt.rcParams.update({'font.size': 16})
-    plt.savefig('figs/fig%i.png'%j,transparant=True)
+        U = nextTimeSparse(U, Sparse)
+        # Insert boundary conditions
+        for j in range(round(r_0/dx)+1):
+            U[j] = C_p # inf BC
+        U[N] = 0
+        relative_plate_thickness = Bf(k_fun(C_i),dt*i,D_RPT)
+        if (relative_plate_thickness < 0.3 and NotChanged):
+            print("Yes")
+            D_RPT = D_hi
+            NotChanged = False
+            subsup = np.zeros(N)+alpha
+            diag = np.zeros(N+1)+1-2*alpha
+            sparse = scipy.sparse.diags(np.array([subsup,diag,subsup]), [-1,0,1])
+        if (relative_plate_thickness > 0):
+            plate_thickness_bar[i] = relative_plate_thickness
+    plt.figure()
+    plt.plot(t,plate_thickness_bar)
+    plt.ylim(0,1.1)
 
 def stabilityCheck(exact,approx):
     residual = np.zeros(len(exact))
@@ -247,10 +237,11 @@ def stabilityCheck(exact,approx):
     plt.rcParams.update({'font.size': 16})
 
 def main(argv):
-    analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
-    finite_diff() # Calc and plot concentration profiles, finite differences
+ #   analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
+ #   finite_diff() # Calc and plot concentration profiles, finite differences
     #Plate_thickness()    
- #   plt.show()
+    fin_diff_two_step()
+    plt.show()
 #    fin_diff_wLin_Temp_profile_Cu() # Calc and plot concentration profile for Cu, linear temp. increase
     
 #    stabilityCheck(analytical,fin_diff) # Comparison analytical and finite differences
