@@ -142,6 +142,8 @@ def saveFig(xVecT,CVecT,timeT,figNameT):
     plt.savefig(figNameT,transparant=True)
 
 
+   
+
 def finite_diff():
     # Spatial discretisation is global
     # Temporal discretisation
@@ -152,6 +154,7 @@ def finite_diff():
     # Create initial concentration vectors
     U = np.append(np.zeros(int(r_0/dx)+1)+1,np.zeros(N-int((r_0)/dx)))
     U[int(r_0/dx)+1] = 0.5
+
     
     # Create diag, sub and super diag for tridiag
     subsup = np.zeros(N)+alpha      #sub and super is equivalent
@@ -172,6 +175,13 @@ def finite_diff():
     plt.figure()
     plt.plot(t, plate_thickness_bar)
             
+def NextB():     
+    dt=       
+    B = np.zeros(N+1)+B_0  
+    for i in range(Nt):     
+        B = B-dt*k_fun(C_p)*np.sqrt(D_1/(pi*dt*i))/2
+    plot(Nt,B)
+
 def fin_diff_wLin_Temp_profile_Cu():
     "With linear temperature profile"
     T1 = 700+T_K
