@@ -37,7 +37,7 @@ D_0 = 3.46*1e7 # [ym^2*s^-1]
 Q = 123.8*1e3 # [J/mol]
 B_0=0.001 # [ym]
 r_0=0.025 # [ym]
-C_s=1.0 # [at%]
+C_p=1.0 # [at%]
 C_0=0.0  # [at]      
 
 "Isothermal annealing at T = 400 [C]"
@@ -46,12 +46,13 @@ T_i = 400.0+T_K # [K]
 
 "Spacial and temporal discretisation"
 N = 100 # Number of spacial partitions of bar
-L = 2.0 # [mm] Length of barH = 30.0 
+L = 0.5 # [um] Length of barH = 30.0 
 #t_i = 0.1 # senconds for isothermal annealing
-t_i = 0 # senconds for isothermal annealing
+t_i = 0.2 # senconds for isothermal annealing
 #T1 = 1e3+T_K # [K] Temperature           
 T_1 = T_i # [K] Temperature           
-
+x_bar = np.linspace(0,L,N+1)
+dx = L/N   # Need N+1 x points, where [N/2] is centered in a 0-indexed array
 # The stability criterion for the explicit finite difference scheme must be fulfilled
 alpha = .4  # alpha = D*dt/dx**2 --> Const in discretisation --> Must be <= 0.5 if used to find dt
 
@@ -73,26 +74,26 @@ def Csurf(T):
 #def C(x,r,T,D,t):
 #    return Csurf(T)-(Csurf(T)-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
 def C(x,r,T,D,t):
-    if(x < r):
-        return C_s
-    return C_s-(C_s-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
+    if((x+dx/2) < r):
+        return C_p
+    return C_p-(C_p-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
             
 print(C(3,r_0,T_i,Diffusivity(T_i),t_i))
 
 print(C(3,r_0,T_i,Diffusivity(T_i),20))
 
+
  # Plot the analytical solution with constant diffusivity (D(x) = D = const.)
 def AnalConc():
-    L = 0.5 # [ym]
-    x_bar = np.linspace(0,L,N+1)
+    #L = 0.5 # [ym]
     Conc = [C(i,r_0,T_i,Diffusivity(T_i),t_i) for i in x_bar]
             
     #fig1 = plt.figure(figsize=(14,10),dpi=600)
-    plt.plot(x_bar,Conc) #label='Si'
+    plt.plot(x_bar,Conc,',') #label='Si'
     plt.xlim(0, L)
-    plt.ylim(0, 2.05)
-    plt.xlabel('x [ym]')
-    plt.ylabel('Concentration [mol/ym]')
+    plt.ylim(0, 1.1)
+    plt.xlabel('x [um]')
+    plt.ylabel('Concentration [mol/um]')
     plt.title('Analytic concentration profile of Si  after %d seconds annealing at %d K' % (t_i, T_i))
     plt.legend(bbox_to_anchor=(0.2,1))
     plt.rcParams.update({'font.size': 18})
@@ -104,6 +105,35 @@ def AnalConc():
     
     
 D_1=Diffusivity(T_i)
+
+def k_fun(C_i):
+    return 2*(C_i-C_0)/(C_p-C_0)
+    
+def Bf(k,t,D):
+    print(1-k*(np.sqrt((D*t)/pi))/B_0)
+    return 1-k*(np.sqrt((D*t)/pi))/B_0
+    
+def plate_thickness(C_i, titt, nameIndex): # cannot use
+    #Thickness=[Bf(k(C(i,r_0,T_i,Diffusivity(T_i),t_i)),t_i,D_1) for i in x_bar]
+    Thickness=[Bf(k(C_i),t_itt,D_1) for t_itt in t]
+    plt.figure()
+    plt.plot(x_bar,Thickness,',') #label='Si'
+    plt.xlim(0, L)
+    plt.ylim(0, 1.1)
+    plt.xlabel('x [um]')
+    plt.ylabel('Normalized Plate thickness [mol/ym]')
+    plt.title('Normalized thickness of Si precipitate  after %d seconds annealing at %d K' % (t_i, T_i))
+    plt.legend(bbox_to_anchor=(0.2,1))
+    plt.rcParams.update({'font.size': 18})
+    plt.savefig("Plate_Thick{1}".format(nameIndex))
+    print(x_bar)
+    print(Conc)
+    plt.close()
+    
+    #plt.savefig('fig1.png',transparant=True)
+    return Thickness
+#def t_star(k,D): trenger ikke denne?... 
+#    return t_r*(k_r*B_0)**2*D_r/(D*(k*B_0r)**2)
     
 # Create diagonal and sub/super diagonal for tridiagonal sparse matrix
 def createSparse(DTemp):
@@ -134,10 +164,6 @@ def saveFig(xVecT,CVecT,timeT,figNameT):
 
 def finite_diff():
     # Spatial discretisation
-    L = 0.5 # [ym]
-    dx = L/N   # Need N+1 x points, where [N/2] is centered in a 0-indexed array
-    x = np.linspace(0, L, N+1) # Mesh points in space
-   
     # Temporal discretisation
     dt = [alpha*dx**2/D_1]
     # Since DNi1 is so small --> dt almost unconditionally stable
@@ -150,8 +176,9 @@ def finite_diff():
     #for i in U:
     #    i[int(N/2)] = 0.5  # Since initial value is undefined at x = 0, we set it to 0.5 which also smoothens the graph
     print(int(r_0/dx),int((L-r_0)/dx))
-    U = np.append(np.zeros(int(r_0/dx)+1)+1,np.zeros(int((L-r_0)/dx)))
+    U = np.append(np.zeros(int(r_0/dx)+1)+1,np.zeros(N-int((r_0)/dx)))
     U[int(r_0/dx)+1] = 0.5
+    print(np.size(U), N)
     
     # Create diag, sub and super diag for tridiag
     #subsup = [np.zeros(N)+alpha, np.zeros(N)+alpha*D_1]      #sub and super is equivalent
@@ -165,15 +192,21 @@ def finite_diff():
 
     #Solve for every timestep
     j = 1
-    plt.figure(3)
+    #plt.figure(3)
+    plate_thickness_bar = np.zeros(np.size(t))
     for i in range(Nt):
         U = nextTimeSparse(U, Sparse)
         # Insert boundary conditions
-        U[0] = 1 # inf BC
+        for j in range(round(r_0/dx)):
+            U[j] = 1 # inf BC
         U[N] = 0
-    plt.plot(x,U)
-
-
+        plate_thickness_bar[i] = Bf(k_fun(C_p),dt*i,D_1)
+    plt.plot(x_bar,U)
+    plt.ylim(0,1.1)
+    plt.figure()
+    plt.plot(t, plate_thickness_bar)
+    print(D_1)
+    #plate_thickness(C_p,"9")
                 
             
     #plt.plot(x, CVec, label=metal)
@@ -255,6 +288,7 @@ def stabilityCheck(exact,approx):
 def main(argv):
     analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
     finite_diff() # Calc and plot concentration profiles, finite differences
+    #Plate_thickness()    
     plt.show()
 #    fin_diff_wLin_Temp_profile_Cu() # Calc and plot concentration profile for Cu, linear temp. increase
     
