@@ -153,7 +153,7 @@ def NextB(D_temp, k_temp, t_temp, dt_temp, B_prev):
         return 0
     return B_temp
 
-def fin_diff(T1,T2,var):
+def fin_diff(T1,T2,RPT_ch):
     if T1==T2:
         ShouldChange = False
     else:
@@ -183,9 +183,9 @@ def fin_diff(T1,T2,var):
     B_RPT = B_0
     t_RPT = 0
     T_RPT = T1
-    ij = 0
-    C_s_RPT = C_i_f(T_RPT)
-    k_RPT = k_f(C_s_RPT)
+    i_time = 0
+    C_i_RPT = C_i_f(T_RPT)
+    k_RPT = k_f(C_i_RPT)
     print('k_RPT is {}'.format(k_RPT))
     print('D1 is {0}, and D2 is {1}'.format(D_1,D_2))
     print('b0 is {}'.format(B_RPT))
@@ -194,11 +194,11 @@ def fin_diff(T1,T2,var):
         U = nextTimeSparse(U, Sparse)
         # Insert boundary conditions
         for j in range(index_cutoff):
-            U[j] = C_s_RPT # inf BC
+            U[j] = C_i_RPT # inf BC
         U[N] = 0
-        RPT_temp = Bf(k_RPT,dt*ij,D_RPT,B_RPT)
-        #RPT_temp = Bf(k_RPT,dt*ij,D_RPT,B_RPT,t_RPT)
-        if (RPT_temp < var and ShouldChange):
+        RPT_temp = Bf(k_RPT,dt*i_time,D_RPT,B_RPT)
+        #RPT_temp = Bf(k_RPT,dt*i_time,D_RPT,B_RPT,t_RPT)
+        if (RPT_temp < RPT_ch and ShouldChange):
             D_RPT = D_2
             B_RPT = RPT_temp*B_RPT
             t_RPT = dt*i
@@ -206,14 +206,14 @@ def fin_diff(T1,T2,var):
             k_RPT = k_f(C_i_f(T_RPT))
             ShouldChanged = False
             sparse = createSparse(D_2,D_Z)
-            ij = 0
+            i_time = 0
         if (RPT_temp > 0):
             RPT_isokin[i] = RPT_temp
         if (i == 0):
-            ij = ij+1
+            i_time = i_time+1
             continue
-        RPT_num[i] = NextB(D_RPT,k_RPT, (ij+1)*dt,dt,RPT_num[i-1])
-        ij = ij+1
+        RPT_num[i] = NextB(D_RPT,k_RPT, (i_time+1)*dt,dt,RPT_num[i-1])
+        i_time = i_time+1
         if any(i*dt<t_i*itt+dt/2 and i*dt>t_i*itt-dt/2 for itt in [1/4,1/2,3/4]):
             plt.plot(x_bar, U, label='After {:.2f}s'.format(i*dt))
  #   exit()
