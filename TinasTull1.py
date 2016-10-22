@@ -47,7 +47,6 @@ C_0=0.0  # [wt.%]
 #Diffusivity for T_i
 D_i = D_0*np.exp(-Q/(R*T_i))
 
-
 "Spatial and temporal discretisation"
 N = 300 # Number of spatial partitions of bar
 L = 1.5 # [um] Length of bar 
@@ -68,6 +67,9 @@ def C_i_f(Ttemp):
     C = C_star*np.exp(-DeltaH/(R*Ttemp))
     #print('Concentration at interface at temperature %.1f K: %e mol/um' % (Ttemp,C))
     return C
+    
+C = C_star*np.exp(-DeltaH/(R*T_i))
+print('Interface concentration: %e' % C)
 
 # Calculates diffusivity at temp. T
 def Diffusivity(T):
@@ -86,18 +88,14 @@ def Bf(k,t,D,B_init):
     
 print('Total time req. for complete particle dissol.: %f s' % (pi/D_i*B_0**2/k_f(C_i_f(T_i))**2))
 
-#Calculate the concentration on the particle surface at the temperature T_i
-def Csurf(T):
-    return C_star*np.exp(-DeltaH/(R*T))
-#print(Csurf(T_i))
-
 # Use for non-isothermal
 #def C(x,r,T,D,t):
 #    return Csurf(T)-(Csurf(T)-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
 def CAnal(x,r,T,D,t):
     if((x-dx/2) <= r):
         return C_p
-    return C_p-(C_p-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
+    #return C_p-(C_p-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
+    return C_i_f(T_i)-(C_i_f(T_i)-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
             
 
  # Plot the analytical solution with constant diffusivity (D(x) = D = const.)
@@ -112,8 +110,6 @@ def AnalConc():
     plt.legend(bbox_to_anchor=(0.2,1))
     plt.rcParams.update({'font.size': 16})
     return Conc
-       
-
     
 #def t_star(k,D): trenger ikke denne?... 
 #    return t_r*(k_r*B_0)**2*D_r/(D*(k*B_0r)**2)
@@ -146,25 +142,60 @@ def NextB(D_temp, k_temp, t_temp, dt_temp, B_prev):
         return 0
     return B_temp
 
-  
+def finite_diff():
+    # Spatial discretisation is global
+    # Temporal discretisation
+    T_1 = T_i
+    D_1 = D_i
+    D_Z = D_1
+    k_1 = k_f(C_i_f(T_1))
+    dt = alpha*dx**2/D_1
+    Nt = math.ceil(t_i/dt)
+    t = np.linspace(0, t_i, Nt) # mesh points in time
+    # Create initial concentration vectors
+    U = np.append(np.zeros(int(r_0/dx)+1)+1,np.zeros(N-int((r_0)/dx)))
+    U[int(r_0/dx)+1] = 0.5
+    
+    # Create sparse
+    Sparse = createSparse(D_1,D_Z)
 
-def fin_diff(T1,T2,var):
-    if T1==T2:
-        ShouldChange = False
-    else:
-        ShouldChange = True
-  
+    #Solve for every timestep
+    plate_thickness_bar = np.zeros(np.size(t))
+    RPT_num = np.zeros(np.size(t))
+    RPT_num[0] = 1.0
+    
+    for i in range(Nt):
+        U = nextTimeSparse(U, Sparse)
+        # Insert boundary conditions
+        for j in range(round(r_0/dx)+1):
+            U[j] = C_p # inf BC
+        U[N] = 0
+        relative_plate_thickness = Bf(k_f(C_i_f(T_i)),dt*i,D_1,B_0)
+        if (relative_plate_thickness > 0):
+            plate_thickness_bar[i] = relative_plate_thickness
+        if i==0:
+            continue
+        RPT_num[i] = NextB(D_1,k_1, (i+1)*dt,dt,RPT_num[i-1])
+    plt.plot(x_bar,U)
+    plt.ylim(0,1.1)
+    plt.figure()
+    plt.plot(t, plate_thickness_bar)
+    plt.figure()
+    plt.plot(t, RPT_num)
+            
+
+def fin_diff_two_step(T1,T2):
+    
     # Spatial discretization
     # Temporal discretisation
     D_1 = Diffusivity(T1)
     D_2 = Diffusivity(T2)
     D_Z = max(D_1,D_2)
-    dt = alpha*dx**2/D_Z        # D_Z will give the lowest dt, use it to be sure we respect the stability criterion
+    dt = alpha*dx**2/D_Z        # D_hi will give the lowest dt, use it to be sure we respect the stability criterion
     Nt = math.ceil(t_i/dt)
     t = np.linspace(0, t_i, Nt+1) # Mesh points in time
     
  # Create initial concentration vectors
-    index_cutoff = r_0
     U = np.append(np.zeros(int(r_0/dx)+1)+1,np.zeros(N-int((r_0)/dx)))
     U[int(r_0/dx)+1] = 0.5 # Since initial value is undefined at x = 0, we set it to 0.5 which also smoothens the graph
 
@@ -172,43 +203,43 @@ def fin_diff(T1,T2,var):
     Sparse = createSparse(D_1,D_Z)
 
     #Solve for every timestep
-    RPT_isokin = np.zeros(np.size(t))
+    plate_thickness_bar = np.zeros(np.size(t))
     RPT_num = np.zeros(np.size(t))
     RPT_num[0] = 1.0
+    ShouldChanged = True
     D_RPT = D_1
     B_RPT = B_0
     t_RPT = 0
     T_RPT = T1
     ij = 0
     k_RPT = k_f(C_i_f(T_RPT))
-    print(D_Z)
-    print(k_RPT)
     for i in range(Nt):
         U = nextTimeSparse(U, Sparse)
         # Insert boundary conditions
         for j in range(round(r_0/dx)+1):
             U[j] = C_p # inf BC
         U[N] = 0
-        RPT_temp = Bf(k_RPT,dt*ij,D_RPT,B_RPT)
-        #RPT_temp = Bf(k_RPT,dt*ij,D_RPT,B_RPT,t_RPT)
-        if (RPT_temp < var and ShouldChange):
+        relative_plate_thickness = Bf(k_RPT,dt*ij,D_RPT,B_RPT)
+        #relative_plate_thickness = Bf(k_f(C_i_RPT),dt*ij,D_RPT,B_RPT,t_RPT)
+        if (relative_plate_thickness < 0.3 and ShouldChanged):
             D_RPT = D_2
-            B_RPT = RPT_temp*B_RPT
+            B_RPT = relative_plate_thickness*B_RPT
             t_RPT = dt*i
             T_RPT = T2
             k_RPT = k_f(C_i_f(T_RPT))
             ShouldChanged = False
             sparse = createSparse(D_2,D_Z)
             ij = 0
-        if (RPT_temp > 0):
-            RPT_isokin[i] = RPT_temp
+            C_i_RPT = C_i_f(T2)
+        if (relative_plate_thickness > 0):
+            plate_thickness_bar[i] = relative_plate_thickness
         if (i == 0):
             ij = ij+1
             continue
         RPT_num[i] = NextB(D_RPT,k_RPT, (ij+1)*dt,dt,RPT_num[i-1])
         ij = ij+1
     plt.figure()
-    plt.plot(t,RPT_isokin)
+    plt.plot(t,plate_thickness_bar)
     plt.ylim(0,1.1)
     plt.figure()
     plt.plot(t,RPT_num)
@@ -227,14 +258,11 @@ def stabilityCheck(exact,approx):
     plt.rcParams.update({'font.size': 16})
 
 def main(argv):
- #   analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
+    analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
+    finite_diff() # Calc and plot concentration profiles, finite differences
     #Plate_thickness()    
- #   fin_diff(T_low,T_low,0)
-#    fin_diff(T_hi,T_low,0.3)
-    fin_diff(T_low,T_hi,0.3)
-#    fin_diff(T_hi,T_low,0.7)
-#    fin_diff(T_low,T_hi,0.7)
-    plt.show()
+    #fin_diff_two_step(T_hi,T_low)
+    #plt.show()
 #    fin_diff_wLin_Temp_profile_Cu() # Calc and plot concentration profile for Cu, linear temp. increase
     
 #    stabilityCheck(analytical,fin_diff) # Comparison analytical and finite differences
