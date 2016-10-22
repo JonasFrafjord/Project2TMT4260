@@ -51,7 +51,7 @@ D_1 = D_0*np.exp(-Q/(R*T_i))
 N = 300 # Number of spacial partitions of bar
 L = 1.5 # [um] Length of barH = 30.0 
 #t_i = 0.1 # senconds for isothermal annealing
-t_i = 10 # senconds for isothermal annealing
+t_i = 1e-1 # senconds for isothermal annealing
 #T1 = 1e3+T_K # [K] Temperature           
 T_1 = T_i # [K] Temperature           
 x_bar = np.linspace(0,L,N+1)
@@ -113,9 +113,9 @@ def AnalConc():
     
 # Create diagonal and sub/super diagonal for tridiagonal sparse matrix
 def createSparse(DTemp1, D_ZT):
-    sup = [alpha*DTemp1/D_ZT*((1/(i+1))-1) for i in range(N)]    # sub and super is equivalent for this finite difference scheme
+    sup = [alpha*DTemp1/D_ZT*(1+(1/(i+1))) for i in range(N)]    # sub and super is equivalent for this finite difference scheme
     sub = [alpha*DTemp1/D_ZT*(1-(1/(i+1))) for i in range(N)] 
-    diag = np.zeros(N+1)+1-2*alpha*DTemp1/D_ZT  # diagonal
+    diag = np.zeros(N+1)+(1-2*alpha*DTemp1/D_ZT)  # diagonal
     return scipy.sparse.diags(np.array([sub,diag,sup]), [-1,0,1])
 
 # Calculation of new concentration profile per time increment
@@ -141,6 +141,7 @@ def saveFig(xVecT,CVecT,timeT,figNameT):
 def finite_diff():
     # Spatial discretisation is global
     # Temporal discretisation
+    D_1 = Diffusivity(T_i)
     dt = alpha*dx**2/D_1
     Nt = math.ceil(t_i/dt)
     t = np.linspace(0, t_i, Nt) # mesh points in time
@@ -154,7 +155,6 @@ def finite_diff():
     #diag = np.zeros(N+1)+1-2*alpha    #diagonal
     #Sparse = scipy.sparse.diags(np.array([subsup,diag,subsup]), [-1,0,1])
     Sparse=createSparse(D_1,D_1)
-    
     #Solve for every timestep
     plate_thickness_bar = np.zeros(np.size(t))
     for i in range(Nt):
@@ -168,9 +168,9 @@ def finite_diff():
             plate_thickness_bar[i] = relative_plate_thickness
     plt.figure()
     plt.plot(x_bar,U)
-    #plt.ylim(0,1.1)
-    plt.figure()
-    plt.plot(t, plate_thickness_bar)
+    plt.ylim(-1.1,1.1)
+#    plt.figure()
+#    plt.plot(t, plate_thickness_bar)
             
 def NextBnum():
     dt = alpha*dx**2/D_1
