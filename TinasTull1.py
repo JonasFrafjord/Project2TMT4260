@@ -47,11 +47,21 @@ C_0=0.0  # [wt.%]
 #Diffusivity for T_i
 D_i = D_0*np.exp(-Q/(R*T_i))
 
+<<<<<<< HEAD
 "Spatial and temporal discretisation"
 N = 300 # Number of spatial partitions of bar
 L = 1.5 # [um] Length of bar 
 #t_i = 0.1 # seconds for isothermal annealing
 t_i = 15 # seconds for isothermal annealing
+=======
+
+
+"Spacial and temporal discretisation"
+N = 100 # Number of spacial partitions of bar
+L = 1.5 # [um] Length of barH = 30.0 
+#t_i = 0.1 # senconds for isothermal annealing
+t_i = 20 # senconds for isothermal annealing
+>>>>>>> 4c36bdb643cfd1ea904a16d0c0c34593086b72d2
 #T1 = 1e3+T_K # [K] Temperature           
 x_bar = np.linspace(0,L,N+1)
 dx = L/N   # Need N+1 x points, where [N/2] is centered in a 0-indexed array
@@ -145,6 +155,7 @@ def NextB(D_temp, k_temp, t_temp, dt_temp, B_prev):
         return 0
     return B_temp
 
+<<<<<<< HEAD
 def finite_diff():
     # Spatial discretisation is global
     # Temporal discretisation
@@ -188,6 +199,16 @@ def finite_diff():
             
 
 def fin_diff_two_step(T1,T2):
+=======
+
+   
+
+def fin_diff(T1,T2,var):
+    if T1==T2:
+        ShouldChange = False
+    else:
+        ShouldChange = True
+>>>>>>> 4c36bdb643cfd1ea904a16d0c0c34593086b72d2
     
     # Spatial discretization
     # Temporal discretisation
@@ -206,43 +227,43 @@ def fin_diff_two_step(T1,T2):
     Sparse = createSparse(D_1,D_Z)
 
     #Solve for every timestep
-    plate_thickness_bar = np.zeros(np.size(t))
+    RPT_isokin = np.zeros(np.size(t))
     RPT_num = np.zeros(np.size(t))
     RPT_num[0] = 1.0
-    ShouldChanged = True
     D_RPT = D_1
     B_RPT = B_0
     t_RPT = 0
     T_RPT = T1
     ij = 0
     k_RPT = k_f(C_i_f(T_RPT))
+    print(D_Z)
+    print(k_RPT)
     for i in range(Nt):
         U = nextTimeSparse(U, Sparse)
         # Insert boundary conditions
         for j in range(round(r_0/dx)+1):
             U[j] = C_p # inf BC
         U[N] = 0
-        relative_plate_thickness = Bf(k_RPT,dt*ij,D_RPT,B_RPT)
-        #relative_plate_thickness = Bf(k_f(C_i_RPT),dt*ij,D_RPT,B_RPT,t_RPT)
-        if (relative_plate_thickness < 0.3 and ShouldChanged):
+        RPT_temp = Bf(k_RPT,dt*ij,D_RPT,B_RPT)
+        #RPT_temp = Bf(k_RPT,dt*ij,D_RPT,B_RPT,t_RPT)
+        if (RPT_temp < var and ShouldChange):
             D_RPT = D_2
-            B_RPT = relative_plate_thickness*B_RPT
+            B_RPT = RPT_temp*B_RPT
             t_RPT = dt*i
             T_RPT = T2
             k_RPT = k_f(C_i_f(T_RPT))
             ShouldChanged = False
             sparse = createSparse(D_2,D_Z)
             ij = 0
-            C_i_RPT = C_i_f(T2)
-        if (relative_plate_thickness > 0):
-            plate_thickness_bar[i] = relative_plate_thickness
+        if (RPT_temp > 0):
+            RPT_isokin[i] = RPT_temp
         if (i == 0):
             ij = ij+1
             continue
         RPT_num[i] = NextB(D_RPT,k_RPT, (ij+1)*dt,dt,RPT_num[i-1])
         ij = ij+1
     plt.figure()
-    plt.plot(t,plate_thickness_bar)
+    plt.plot(t,RPT_isokin)
     plt.ylim(0,1.1)
     plt.figure()
     plt.plot(t,RPT_num)
@@ -261,11 +282,22 @@ def stabilityCheck(exact,approx):
     plt.rcParams.update({'font.size': 16})
 
 def main(argv):
+<<<<<<< HEAD
     analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
     finite_diff() # Calc and plot concentration profiles, finite differences
     #Plate_thickness()    
     #fin_diff_two_step(T_hi,T_low)
     #plt.show()
+=======
+ #   analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
+    #Plate_thickness()    
+ #   fin_diff(T_low,T_low,0)
+#    fin_diff(T_hi,T_low,0.3)
+    fin_diff(T_low,T_hi,0.3)
+#    fin_diff(T_hi,T_low,0.7)
+#    fin_diff(T_low,T_hi,0.7)
+    plt.show()
+>>>>>>> 4c36bdb643cfd1ea904a16d0c0c34593086b72d2
 #    fin_diff_wLin_Temp_profile_Cu() # Calc and plot concentration profile for Cu, linear temp. increase
     
 #    stabilityCheck(analytical,fin_diff) # Comparison analytical and finite differences
