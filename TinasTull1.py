@@ -156,11 +156,12 @@ def fin_diff(T1,T2,var):
     D_1 = Diffusivity(T1)
     D_2 = Diffusivity(T2)
     D_Z = max(D_1,D_2)
-    dt = alpha*dx**2/D_Z        # D_hi will give the lowest dt, use it to be sure we respect the stability criterion
+    dt = alpha*dx**2/D_Z        # D_Z will give the lowest dt, use it to be sure we respect the stability criterion
     Nt = math.ceil(t_i/dt)
     t = np.linspace(0, t_i, Nt+1) # Mesh points in time
     
  # Create initial concentration vectors
+    index_cutoff = r_0
     U = np.append(np.zeros(int(r_0/dx)+1)+1,np.zeros(N-int((r_0)/dx)))
     U[int(r_0/dx)+1] = 0.5 # Since initial value is undefined at x = 0, we set it to 0.5 which also smoothens the graph
 
