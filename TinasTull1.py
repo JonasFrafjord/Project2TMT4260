@@ -68,7 +68,12 @@ def C_i_f(Ttemp):
     #print('Concentration at interface at temperature %.1f K: %e mol/um' % (Ttemp,C))
     return C
     
-C = C_star*np.exp(-DeltaH/(R*T_i))
+def C_i_f2(Ttemp):
+    C = C_star*100*np.exp(-DeltaH/(R*Ttemp))
+    #print('Concentration at interface at temperature %.1f K: %e mol/um' % (Ttemp,C))
+    return C
+    
+C = C_star*100*np.exp(-DeltaH/(R*T_i))
 print('Interface concentration: %e' % C)
 
 # Calculates diffusivity at temp. T
@@ -88,14 +93,13 @@ def Bf(k,t,D,B_init):
     
 print('Total time req. for complete particle dissol.: %f s' % (pi/D_i*B_0**2/k_f(C_i_f(T_i))**2))
 
-# Use for non-isothermal
-#def C(x,r,T,D,t):
-#    return Csurf(T)-(Csurf(T)-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
+
 def CAnal(x,r,T,D,t):
     if((x-dx/2) <= r):
         return C_p
     #return C_p-(C_p-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
-    return C_i_f(T_i)-(C_i_f(T_i)-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
+    # Use for non-isothermal
+    return C_i_f2(T_i)-(C_i_f2(T_i)-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
             
 
  # Plot the analytical solution with constant diffusivity (D(x) = D = const.)
@@ -259,7 +263,7 @@ def stabilityCheck(exact,approx):
 
 def main(argv):
     analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
-    finite_diff() # Calc and plot concentration profiles, finite differences
+    #finite_diff() # Calc and plot concentration profiles, finite differences
     #Plate_thickness()    
     #fin_diff_two_step(T_hi,T_low)
     #plt.show()
