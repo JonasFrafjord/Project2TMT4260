@@ -66,14 +66,14 @@ alpha = .4  # alpha = D*dt/dx**2 --> Const in discretisation --> Must be <= 0.5 
 "Precipitation of pure Si particles in a binary Al-Si alloy, assuming a diluted Al matrix."
 # Calculating and plotting concentration profile for the spatial range [-1,+1] mm after 20 s annealing at 400 deg C
 
-def C_i_fun(Ttemp):
+def C_i_f(Ttemp):
     return C_star*np.exp(-DeltaH/(R*Ttemp))
 
 # Calculates diffusivity
 def Diffusivity(T):
     return D_0*np.exp(-Q/(R*T))
 
-def k_fun(C_it):
+def k_f(C_it):
     return 2*(C_it-C_0)/(C_p-C_0)
     
 #def Bf(k,t,D,B_init,t_init):
@@ -81,7 +81,7 @@ def k_fun(C_it):
 
 def Bf(k,t,D,B_init):
     return (B_init-k*(np.sqrt(D*t/pi)))/B_0
-print(pi/D_i*B_0**2/k_fun(C_i_fun(T_i))**2)
+print(pi/D_i*B_0**2/k_f(C_i_f(T_i))**2)
 #Calculate the concentration on the particle surface at the temperature T_i
 def Csurf(T):
     return C_star*np.exp(-DeltaH/(R*T))
@@ -136,14 +136,22 @@ def saveFig(xVecT,CVecT,timeT,figNameT):
     plt.rcParams.update({'font.size': 18})
     plt.savefig(figNameT,transparant=True)
 
+def NextB(D_temp, k_temp, t_temp, dt_temp, B_prev):
+    B_temp = B_prev-dt_temp*k_temp*np.sqrt(D_temp/(pi*t_temp))/(B_0*2)
+    if B_temp < 0:
+        return 0
+    return B_temp
+
 
    
 
 def finite_diff():
     # Spatial discretisation is global
     # Temporal discretisation
+    T_1 = T_i
     D_1 = D_i
     D_Z = D_1
+    k_1 = k_f(C_i_f(T_1))
     dt = alpha*dx**2/D_1
     Nt = math.ceil(t_i/dt)
     t = np.linspace(0, t_i, Nt) # mesh points in time
@@ -156,34 +164,28 @@ def finite_diff():
 
     #Solve for every timestep
     plate_thickness_bar = np.zeros(np.size(t))
-    for i in range(Nt+1):
+    RPT_num = np.zeros(np.size(t))
+    RPT_num[0] = 1.0
+    
+    for i in range(Nt):
         U = nextTimeSparse(U, Sparse)
         # Insert boundary conditions
         for j in range(round(r_0/dx)+1):
             U[j] = C_p # inf BC
         U[N] = 0
-        relative_plate_thickness = Bf(k_fun(C_i_fun(T_i)),dt*i,D_1,B_0)
+        relative_plate_thickness = Bf(k_f(C_i_f(T_i)),dt*i,D_1,B_0)
         if (relative_plate_thickness > 0):
             plate_thickness_bar[i] = relative_plate_thickness
+        if i==0:
+            continue
+        RPT_num[i] = NextB(D_1,k_1, (i+1)*dt,dt,RPT_num[i-1])
     plt.plot(x_bar,U)
     plt.ylim(0,1.1)
     plt.figure()
     plt.plot(t, plate_thickness_bar)
+    plt.figure()
+    plt.plot(t, RPT_num)
             
-def NextBnum():
-    dt = alpha*dx**2/D_i
-    Nt = math.ceil(t_i/dt)
-    t = np.linspace(0, t_i, Nt+1)
-    Bnum = np.zeros(Nt+1)
-    Bnum[0] = 1
-    for i in range(Nt):
-        Bnum[i+1] = Bnum[i]-dt*k_fun(C_i_fun(T_i))*np.sqrt(D_i/(pi*dt*(i+1)))/(B_0*2)
-        if (Bnum[i+1] < 0):
-            Bnum[i+1]=0
-            break
- #   plt.figure()
-    plt.ylim(-0.1,1.1) 
-    plt.plot(t,Bnum)
 
 def fin_diff_two_step(T1,T2):
     
@@ -205,34 +207,45 @@ def fin_diff_two_step(T1,T2):
 
     #Solve for every timestep
     plate_thickness_bar = np.zeros(np.size(t))
+    RPT_num = np.zeros(np.size(t))
+    RPT_num[0] = 1.0
     ShouldChanged = True
     D_RPT = D_1
     B_RPT = B_0
     t_RPT = 0
+    T_RPT = T1
     ij = 0
-    C_i_RPT = C_i_fun(T1)
+    k_RPT = k_f(C_i_f(T_RPT))
     for i in range(Nt):
         U = nextTimeSparse(U, Sparse)
         # Insert boundary conditions
         for j in range(round(r_0/dx)+1):
             U[j] = C_p # inf BC
         U[N] = 0
-        relative_plate_thickness = Bf(k_fun(C_i_RPT),dt*ij,D_RPT,B_RPT)
-        #relative_plate_thickness = Bf(k_fun(C_i_RPT),dt*ij,D_RPT,B_RPT,t_RPT)
+        relative_plate_thickness = Bf(k_RPT,dt*ij,D_RPT,B_RPT)
+        #relative_plate_thickness = Bf(k_f(C_i_RPT),dt*ij,D_RPT,B_RPT,t_RPT)
         if (relative_plate_thickness < 0.3 and ShouldChanged):
             D_RPT = D_2
             B_RPT = relative_plate_thickness*B_RPT
             t_RPT = dt*i
+            T_RPT = T2
+            k_RPT = k_f(C_i_f(T_RPT))
             ShouldChanged = False
             sparse = createSparse(D_2,D_Z)
             ij = 0
-            C_i_RPT = C_i_fun(T2)
+            C_i_RPT = C_i_f(T2)
         if (relative_plate_thickness > 0):
             plate_thickness_bar[i] = relative_plate_thickness
+        if (i == 0):
+            ij = ij+1
+            continue
+        RPT_num[i] = NextB(D_RPT,k_RPT, (ij+1)*dt,dt,RPT_num[i-1])
         ij = ij+1
     plt.figure()
     plt.plot(t,plate_thickness_bar)
     plt.ylim(0,1.1)
+    plt.figure()
+    plt.plot(t,RPT_num)
 
 def stabilityCheck(exact,approx):
     residual = np.zeros(len(exact))
@@ -249,8 +262,7 @@ def stabilityCheck(exact,approx):
 
 def main(argv):
  #   analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
- #   finite_diff() # Calc and plot concentration profiles, finite differences
- #   NextBnum()
+#    finite_diff() # Calc and plot concentration profiles, finite differences
     #Plate_thickness()    
     fin_diff_two_step(T_hi,T_low)
     plt.show()
@@ -260,4 +272,4 @@ def main(argv):
 #    print("--- %s seconds ---" % (time.time() - start_time))
     
 if __name__ == "__main__":
-main(sys.argv[1:])
+    main(sys.argv[1:])
