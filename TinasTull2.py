@@ -150,7 +150,6 @@ def fin_diff(T1,T2,RSR_ch):
     #Variables needed in this module
     D_RSR = D_1
     R_RSR = r_0
-    t_RSR = 0
     T_RSR = T1
     i_time = 0
     C_i_RSR = C_i_f(T_RSR)
@@ -186,6 +185,7 @@ def fin_diff(T1,T2,RSR_ch):
     for i in range(Nt):
         U = nextTimeSparse(U, Sparse)
         # Insert boundary conditions       
+        U[index_cutoff] = C_i_RSR        
         U[N] = C_0
         RSR_anal[i] = R_f(k_RSR,dt*i_time,D_RSR,R_RSR)
         RSR_num_temp = NextR(k_RSR,dt*i_time,dt,D_RSR,R_RSR,RSR_num[i-1])
@@ -206,7 +206,7 @@ def fin_diff(T1,T2,RSR_ch):
         i_time = i_time +1
     print(i_time,Nt)
     plt.figure()
-    plt.plot(x_bar,U)
+    plt.plot(x_bar[index_cutoff::],U[index_cutoff::])
     #plt.ylim(-1.1,1.1)
     plt.figure()
     plt.plot(t,RSR_num)
