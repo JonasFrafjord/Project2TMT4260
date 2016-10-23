@@ -36,19 +36,19 @@ T_low = 400.0+T_K
 T_hi = 430.0+T_K
 
 "From table 1 in Bjørneklett"
-C_star=2.17e3 # wt%
+C_star=2.17e3 # [wt.%]
 DeltaH=50.8e3 # [J/mol]
 D_0 = 3.46e7 # [um^2*s^-1]
 Q = 123.8e3 # [J/mol]
 B_0=1e-3 # [um]
 r_0=0.025 # [um]
-C_p=1.0e2 # [at%]
-C_0=0.0  # [at]      
+C_p=1.0e2 # [wt.%]
+C_0=0.0  # [wt.%]      
 
-"Spacial and temporal discretisation"
+"Spatial and temporal discretisation"
 N = 300 # Number of spacial partitions of bar
 L = 1.5 # [um] Length of barH = 30.0 
-t_i = 1e1 # senconds for isothermal annealing
+t_i = 2e1 # seconds for isothermal annealing
 x_bar = np.linspace(0,L,N+1)
 dx = L/N   # Need N+1 x points, where [N/2] is centered in a 0-indexed array
 # The stability criterion for the explicit finite difference scheme must be fulfilled
@@ -86,7 +86,7 @@ def NextR(k_temp, t_temp, dt_temp, D_temp, r_init, r_prev):
     if t_temp < 0:
         r_temp = r_prev - (dt_temp*k_temp/2*(D_temp/r_prev + np.sqrt(D_temp/(pi*t_temp))))
     else:
-        r_temp = np.sqrt(r_0**2-k_temp*D_temp*t_temp)
+        r_temp = np.sqrt(r_0**2-k_temp*D_temp*t_temp) # long time solution
     return r_temp
 
 #Isokinetical solution, Normalized Volume Fraction of Spherical Particle for Two-Step annealing, LONG TIMES    
@@ -97,8 +97,8 @@ def VolFrac(k_temp,t_temp,D_temp,r_init):
 def CAnal(r,R,T,D,t,C_i_T):
     if((r-dx/2) <= R):
         return C_i_T
-    return C_0+(C_i_T-C_0)*(R/r)*(1-scipy.special.erf((r-R)/(2.0*np.sqrt(D*t))))
-
+    #return C_0-(C_i_T-C_0)*(R/r)*(1-scipy.special.erf((r-R)/(2.0*np.sqrt(D*t))))
+    return C_0+(C_i_T-C_0)*(R/r)*scipy.special.erfc((r-R)/(2.0*np.sqrt(D*t)))
             
 #print(C(3,r_0,T_i,Diffusivity(T_i),t_i))
 
@@ -124,7 +124,7 @@ def AnalConc():
     
 # Create diagonal and sub/super diagonal for tridiagonal sparse matrix
 def createSparse(DTemp1, D_ZT):
-    sup = [alpha*DTemp1/D_ZT*(1+(1/(i+1))) for i in range(N)]    # sub and super is equivalent for this finite difference scheme
+    sup = [alpha*DTemp1/D_ZT*(1+(1/(i+1))) for i in range(N)]    # sub and super is non-equivalent for this finite difference scheme
     sub = [alpha*DTemp1/D_ZT*(1-(1/(i+1))) for i in range(N)] 
     diag = np.zeros(N+1)+(1-2*alpha*DTemp1/D_ZT)  # diagonal
     return scipy.sparse.diags(np.array([sub,diag,sup]), [-1,0,1])
@@ -164,11 +164,7 @@ def fin_diff(T1,T2,RSR_ch):
     t = np.linspace(0, t_i, Nt+1) # Mesh points in time
     
     # Create initial concentration vectors
-<<<<<<< HEAD
-    index_cutoff = round(r_0/dx)+1
-=======
     index_cutoff = round(r_0/dx)
->>>>>>> 1ad88209eef06324c40be65ca12a9a93f9136efb
     U = np.append(np.zeros(index_cutoff)+C_p,np.zeros(N-index_cutoff+1)+C_0)
     U[index_cutoff] = C_i_RSR
 
@@ -186,7 +182,7 @@ def fin_diff(T1,T2,RSR_ch):
     
     print('k_RSR is {}'.format(k_RSR))
     print('D1 is {0}, and D2 is {1}'.format(D_1,D_2))
-    print('b0 is {}'.format(R_RSR))
+    print('r0 is {}'.format(R_RSR))
 
     for i in range(Nt):
         U = nextTimeSparse(U, Sparse)
@@ -202,27 +198,14 @@ def fin_diff(T1,T2,RSR_ch):
             R_RSR = RSR_num_temp
             i_time = 0
             ShouldChange = False
-            sparse = createSparse(D_2,D_Z)
- #       if (VF_iso_temp > 0):
+            Sparse = createSparse(D_2,D_Z)
+        if (VF_iso_temp > 0):
             VF_isokin[i] = VF_iso_temp
  #       if (RSR_num_temp > 0):
             VF_num[i]= (RSR_num_temp/r_0)**3
             RSR_num[i] = RSR_num_temp
         i_time = i_time +1
     plt.figure()
-<<<<<<< HEAD
-    plt.plot(x_bar[index_cutoff::],U[index_cutoff::])
-    plt.ylim(-1.1,1.1)
-    plt.figure()
-    plt.plot(t,RSR_num)
-    plt.plot(t,RSR_anal,',')
-    plt.ylim(0,1.1)
-    plt.figure()
-    plt.plot(t,VF_num)
-    plt.plot(t,VF_isokin,',')
-    plt.ylim(0,1.1)
-    plt.xlim(0,21)
-=======
     plt.plot(x_bar,U)
     #plt.ylim(-1.1,1.1)
     plt.figure()
@@ -234,16 +217,15 @@ def fin_diff(T1,T2,RSR_ch):
 #    plt.plot(t,VF_isokin,',')
 #    plt.ylim(0,1.1)
 #    plt.xlim(0,21)
->>>>>>> 1ad88209eef06324c40be65ca12a9a93f9136efb
 
 def main(argv):
     analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
  #   finite_diff() # Calc and plot concentration profiles, finite differences
     #Plate_thickness()    
-    fin_diff(T_low,T_low,0.3)
+    #fin_diff(T_low,T_low,0.3)
 #    fin_diff(T_low,T_hi,0.3)
  #   NextBnum()
-    plt.show()
+    #plt.show()
 #    fin_diff_wLin_Temp_profile_Cu() # Calc and plot concentration profile for Cu, linear temp. increase
 #    stabilityCheck(analytical,fin_diff) # Comparison analytical and finite differences
 #    print("--- %s seconds ---" % (time.time() - start_time))
