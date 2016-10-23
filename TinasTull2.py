@@ -222,7 +222,7 @@ def main(argv):
     analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
  #   finite_diff() # Calc and plot concentration profiles, finite differences
     #Plate_thickness()    
-    #fin_diff(T_low,T_low,0.3)
+    fin_diff(T_low,T_low,0.3)
 #    fin_diff(T_low,T_hi,0.3)
  #   NextBnum()
     #plt.show()
