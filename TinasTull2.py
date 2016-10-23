@@ -93,14 +93,19 @@ def R_f(k,t,D,r_init):
     #NB! Only short time in exercise, do not need to check. 
     return (r_init-k*D*t/(2*r_init)-k*np.sqrt((D*t)/pi))/r_0 # Short time solution
 
+def NextR(D_temp, k_temp, t_temp, dt_temp, r_prev):
+    r_temp = r_prev - dt_temp*k_temp/(2*r_0)*(D_temp/r_prev + np.sqrt(D_temp/(pi*t_temp)))
+    if r_temp < 0:
+        return 0
+    return r_temp
+
 #Numerical, Normalized Volume Fraction of Spherical Particle for Two-Step annealing, LONG TIMES
-def NextVolFracNum():
-    return 
+def NextVolFracNum(r_temp,r_init):
+    return r_temp**3*(r_init)**(-3)
     
 #Analytical, Normalized Volume Fraction of Spherical Particle for Two-Step annealing, LONG TIMES    
-def VolFrac(k_temp,D_temp,t_temp):
-    return (1 - k_temp*D_temp*t_temp/r_0**2)**(2/3)  
-    
+def VolFrac(k_temp,t_temp,D_temp,r_init):
+    return (1 - k_temp*D_temp*t_temp/r_init**2)**(2/3)  
 
 #print(C_i, np.sqrt(D_1),k_fun(C_i), "C_i, D_1, k")
 #print(pi/D_1*B_0**2/k_fun(C_i)**2, "Tid")
@@ -138,12 +143,6 @@ def AnalConc():
     plt.legend(bbox_to_anchor=(0.2,1))
     plt.rcParams.update({'font.size': 18})
     return Conc
-       
-def Nextr(D_temp, k_temp, t_temp, dt_temp, r_prev):
-    r_temp = r_prev - dt_temp*k_temp/(2*r_0)*(D_temp/r_prev + np.sqrt(D_temp/(pi*t_temp)))
-    if r_temp < 0:
-        return 0
-    return r_temp
     
 #def t_star(k,D): trenger ikke denne?... 
 #    return t_r*(k_r*B_0)**2*D_r/(D*(k*B_0r)**2)
@@ -175,11 +174,6 @@ def saveFig(xVecT,CVecT,timeT,figNameT):
     plt.rcParams.update({'font.size': 18})
     plt.savefig(figNameT,transparant=True)
 
-
-def NextR(D_temp, k_temp, t_temp, dt_temp, R_prev):
-    R_temp = R_prev
-    return R_temp
-
 def fin_diff(T1,T2,RSR_ch):
     if T1==T2:
         ShouldChange = False
@@ -204,16 +198,22 @@ def fin_diff(T1,T2,RSR_ch):
     Sparse = createSparse(D_1,D_Z)
 
     #Solve for every timestep
-    RSR_isokin = np.zeros(np.size(t))
+    
     RSR_num = np.zeros(np.size(t))
     RSR_num[0] = 1.0
+    RSR_anal = np.zeros(np.size(t))
+    VF_num = np.zeros(np.size(t))
+    VF_num[0] = 1.0
+    VF_isokin = np.zeros(np.size(t))      
+    
     D_RSR = D_1
-    B_RSR = B_0
+    R_RSR = r_0
     t_RSR = 0
     T_RSR = T1
     i_time = 0
     C_i_RSR = C_i_f(T_RSR)
     k_RSR = k_f(C_i_RSR)
+    
     print('k_RSR is {}'.format(k_RSR))
     print('D1 is {0}, and D2 is {1}'.format(D_1,D_2))
     print('b0 is {}'.format(B_RSR))
@@ -225,16 +225,21 @@ def fin_diff(T1,T2,RSR_ch):
             U[j] = C_p # inf BC
             U[index_cutoff] = C_i_RSR
         U[N] = 0
-        RSR_temp = R_f(k_f(C_i_RSR),dt*i_time,D_RSR,B_RSR)
-        if (RSR_temp < RSR_ch and ShouldChange):
+
+        RSR_anal[i] = R_f(k_f(C_i_RSR),dt*i_time,D_RSR,R_RSR)
+        RSR_num_temp = NextR(k_f(C_i_RSR),dt*i_time,D_RSR,R_num[i-1])
+        VF_num_temp = NextVolFracNum(RSR_num[i-1],R_RSR)
+        VF_iso_temp = VolFrac(k_f(C_i_RSR),dt*i_time,D_RSR,R_RSR)
+        
+        if (RSR_num_temp < RSR_ch and ShouldChange):
             print("Yes")
             D_RSR = D_2
-            B_RSR = RSR_temp
+            R_RSR = RSR_num_temp
             i_time = 0
             ShouldChange = False
             sparse = createSparse(D_2,D_z)
-        if (RSR_temp > 0):
-            RSR_isokin[i] = RSR_temp
+        if (RSR_num_temp > 0):
+            RSR_num[i] = RSR_num_temp
         i_time = i_time +1
     print(i_time,Nt)
     plt.figure()
