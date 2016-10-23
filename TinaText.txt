@@ -1,6 +1,0 @@
-<<<<<<< HEAD
-Tina sin fil
-Jonas Leker
-=======
-Tina sitt område
->>>>>>> cd94057a39355c19608ab5d55a967f56a4908b7e

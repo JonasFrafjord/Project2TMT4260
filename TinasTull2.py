@@ -11,7 +11,12 @@ Jonas Frafjord
 Jonas Kristoffer Sunde
 TMT4260 Modellering av Fasetransformasjonar
 Team 1
+<<<<<<< HEAD
 Project 2, Part 2B
+=======
+Project 2, Part 2A
+3D
+>>>>>>> edb86c962ae4a390471a261226d257e82a89d4de
 """
 import sys
 import numpy as np
@@ -31,17 +36,18 @@ NA = 6.022*10**23 # Avogadro's constant, [particles/mol]
 "Isothermal annealing at T = 400 [C]"
 T_K = 273.15 # Deg K at 0 deg C
 T_i = 400.0+T_K # [K]
+T_low = 400.0+T_K
+T_hi = 430.0+T_K
 
 "From table 1 in Bjørneklett"
-C_star=2.17e1 # wt%/100
+C_star=2.17e3 # wt%/100
 DeltaH=50.8e3 # [J/mol]
 D_0 = 3.46e7 # [um^2*s^-1]
 Q = 123.8e3 # [J/mol]
 B_0=1e-3 # [um]
 r_0=0.025 # [um]
-C_p=1.0 # [at%]
+C_p=1.0e2 # [at%]
 C_0=0.0  # [at]      
-C_i = C_star*np.exp(-DeltaH/(R*T_i))
 
 #Diffusivity for T_i
 D_i = D_0*np.exp(-Q/(R*T_i))
@@ -51,7 +57,7 @@ D_i = D_0*np.exp(-Q/(R*T_i))
 N = 300 # Number of spacial partitions of bar
 L = 1.5 # [um] Length of barH = 30.0 
 #t_i = 0.1 # senconds for isothermal annealing
-t_i = 10 # senconds for isothermal annealing
+t_i = 1e-1 # senconds for isothermal annealing
 #T1 = 1e3+T_K # [K] Temperature           
 T_1 = T_i # [K] Temperature           
 x_bar = np.linspace(0,L,N+1)
@@ -63,13 +69,20 @@ alpha = .4  # alpha = D*dt/dx**2 --> Const in discretisation --> Must be <= 0.5 
 "Precipitation of pure Si particles in a binary Al-Si alloy, assuming a diluted Al matrix."
 # Calculating and plotting concentration profile for the spatial range [-1,+1] mm after 20 s annealing at 400 deg C
 
+# Concentration at interface at temperature Ttemp
+def C_i_f(Ttemp):
+    C = C_star*np.exp(-DeltaH/(R*Ttemp))
+    #print('Concentration at interface at temperature %.1f K: %e mol/um' % (Ttemp,C))
+    return C
+
 # Calculates diffusivity
 def Diffusivity(T):
     return D_0*np.exp(-Q/(R*T))
 
-def k_fun(C_it):
-    return 2*(C_it-C_0)/(C_p-C_0)
-    
+def k_f(C_it):
+    #return 2*(C_it-C_0)/(C_p-C_0)
+    return 2*(C_it-C_0)/(C_p-C_it) # NB! Whelan definition
+   
 #Analytical normalized (relative) radius of spherical precipitate (3D case)    
 def Bf(k,t,D,r_init):
 #Check if short time or long term solution should be used.     
@@ -99,10 +112,12 @@ def C_i_f(Ttemp):
 # Use for non-isothermal
 #def C(x,r,T,D,t):
 #    return Csurf(T)-(Csurf(T)-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
-def C(z,r,Temp,D,t):
-    if((z-dx/2) <= r):
-        return C_p
-    return C_0-(C_i_f(Temp)-C_0)*(r/z)*(1-scipy.special.erf((z-r)/(2.0*np.sqrt(D*t))))
+
+def CAnal(r,R,T,D,t,C_i_T):
+    if((r-dx/2) <= R):
+        return C_i_T
+    return C_0-(C_i_T-C_0)*(R/r)*(1-scipy.special.erf((r-R)/(2.0*np.sqrt(D*t))))
+
             
 #print(C(3,r_0,T_i,Diffusivity(T_i),t_i))
 
@@ -111,8 +126,8 @@ def C(z,r,Temp,D,t):
 
  # Plot the analytical solution with constant diffusivity (D(x) = D = const.)
 def AnalConc():
-    Conc = [C(i,r_0,T_i,Diffusivity(T_i),t_i) for i in x_bar]
-    plt.figure()    
+    C_i_T = C_i_f(T_i)
+    Conc = [CAnal(i,r_0,T_i,D_i,t_i,C_i_T) for i in x_bar]
     plt.plot(x_bar,Conc) #label='Si'
     plt.xlim(0, L)
     plt.ylim(-1.1, 1.1)
@@ -134,9 +149,9 @@ def Nextr(D_temp, k_temp, t_temp, dt_temp, r_prev):
     
 # Create diagonal and sub/super diagonal for tridiagonal sparse matrix
 def createSparse(DTemp1, D_ZT):
-    sup = [alpha*DTemp1/D_ZT*((1/(i+1))-1) for i in range(N)]    # sub and super is equivalent for this finite difference scheme
+    sup = [alpha*DTemp1/D_ZT*(1+(1/(i+1))) for i in range(N)]    # sub and super is equivalent for this finite difference scheme
     sub = [alpha*DTemp1/D_ZT*(1-(1/(i+1))) for i in range(N)] 
-    diag = np.zeros(N+1)+1-2*alpha*DTemp1/D_ZT  # diagonal
+    diag = np.zeros(N+1)+(1-2*alpha*DTemp1/D_ZT)  # diagonal
     return scipy.sparse.diags(np.array([sub,diag,sup]), [-1,0,1])
 
 # Calculation of new concentration profile per time increment
@@ -159,82 +174,84 @@ def saveFig(xVecT,CVecT,timeT,figNameT):
     plt.rcParams.update({'font.size': 18})
     plt.savefig(figNameT,transparant=True)
 
-def fin_diff(T1,T2,var):
+          
+def NextR(D_temp, k_temp, t_temp, dt_temp, R_prev):
+    R_temp = R_prev
+    return R_temp
+
+def fin_diff_two_step(T1,T2,RSR_ch):
     if T1==T2:
         ShouldChange = False
     else:
         ShouldChange = True
- 
+    #Diffusivity at 1.st stage and 2.nd stage
     D_1 = Diffusivity(T1)
     D_2 = Diffusivity(T2)
-    D_Z = max(D_1,D_2) 
- 
-    # Spatial discretisation is global
-    # Temporal discretisation
- 
-    dt = alpha*dx**2/D_1
-    Nt = math.ceil(t_i/dt)
-    t = np.linspace(0, t_i, Nt) # mesh points in time
+    D_Z = max(D_1,D_2)
 
+    # Temporal discretisation
+    dt = alpha*dx**2/D_Z       # D_hi will give the lowest dt, use it to be sure we respect the stability criterion
+    Nt = math.ceil(t_i/dt)
+    t = np.linspace(0, t_i, Nt+1) # Mesh points in time
+    
     # Create initial concentration vectors
-    U = np.append(np.zeros(int(r_0/dx)+1)+1,np.zeros(N-int((r_0)/dx)))
-    U[int(r_0/dx)+1] = 0.5
-   
-    # Create the sparse matrix
-    Sparse=createSparse(D_1,D_1)
-    
-    #Solve for every timestep. RSR=relative sphere radius
+    index_cutoff = round(r_0/dx)+1
+    U = np.append(np.zeros(index_cutoff)+1,np.zeros(N-index_cutoff+1))
+    U[index_cutoff] = 0.5
+
+    # Create diag, sub and super diag for tridiag
+    Sparse = createSparse(D_1,D_Z)
+
+    #Solve for every timestep
+    RSR_isokin = np.zeros(np.size(t))
     RSR_num = np.zeros(np.size(t))
     RSR_num[0] = 1.0
-    RVF_isokin = np.zeros(np.size(t))
-    RSR_num = np.zeros(np.size(t))
-    RSR_num[0] = 1.0
-    D_RSR = D_1
-    r_RSR = B_0
-    t_RSR = 0
-    T_RSR = T1
-    ij = 0
-    k_RSR = k_fun(C_i_f(T_RSR))
-    
+    D_RPT = D_1
+    B_RPT = B_0
+    t_RPT = 0
+    T_RPT = T1
+    i_time = 0
+    C_i_RPT = C_i_f(T_RPT)
+    k_RPT = k_f(C_i_RPT)
+    print('k_RPT is {}'.format(k_RPT))
+    print('D1 is {0}, and D2 is {1}'.format(D_1,D_2))
+    print('b0 is {}'.format(B_RPT))
+
     for i in range(Nt):
         U = nextTimeSparse(U, Sparse)
         # Insert boundary conditions
         for j in range(round(r_0/dx)+1):
             U[j] = C_p # inf BC
         U[N] = 0
-        RSR_temp = Bf(k_fun(C_i),dt*i,D_RSR,r_0)
-        if (RSR_temp < var and ShouldChange):
-            D_RSR = D_2
-            r_RSR= RSR_temp*r_RSR
-            t_RSR = dt*i
-            T_RSR = T2
-            k_RSR = k_f(C_i_f(T_RSR))
-            ShouldChange = False
-            sparse = createSparse(D_2,D_Z)
-            ij = 0
-        
+        RSR_temp = Bf(k_f(C_i_RPT),dt*i_time,D_RPT,B_RPT)
+        if (RSR_temp < RSR_ch and ShouldChange):
+            print("Yes")
+            D_RPT = D_hi
+            B_RPT = RSR_temp
+            i_time = 0
+            NotChanged = False
+            subsup = np.zeros(N)+alpha
+            diag = np.zeros(N+1)+1-2*alpha
+            sparse = scipy.sparse.diags(np.array([subsup,diag,subsup]), [-1,0,1])
         if (RSR_temp > 0):
             RSR_isokin[i] = RSR_temp
-        if (i == 0):
-            ij = ij+1
-            continue
-        RSR_num[i] = Nextr(D_1,k_1, (i+1)*dt,dt,RSR_num[i-1])
-        ij = ij+1
-    plt.figure()    
+        i_time = i_time +1
+    print(i_time,Nt)
+    plt.figure()
     plt.plot(x_bar,U)
-    plt.ylim(-1.1,1.1)
-    plt.title('Numerical concentration profile in 3D for isothermal annealing at %d K for %d seconds' %(T_i,t_i))
-    plt.figure()
-    plt.plot(t, sphere_radius)
-    plt.title('Analytical normalized sphere radius (3D) for isothermal annealing at %d K for %d seconds' %(T_i,t_i))
-    plt.figure()
-    plt.plot(t, RSR_num)
-    plt.title('Numerical normalized sphere radius (3D) for isothermal annealing at %d K for %d seconds' %(T_i,t_i))
+ #   plt.figure()
+ #   plt.plot(t,RSR_isokin)
+ #   plt.ylim(0,1.1)
+
 
 def main(argv):
     analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
-    finite_diff() # Calc and plot concentration profiles, finite differences
-    plt.show() 
+ #   finite_diff() # Calc and plot concentration profiles, finite differences
+    #Plate_thickness()    
+    fin_diff_two_step(T_low,T_low,0.3)
+ #   NextBnum()
+    plt.show()
+#    fin_diff_wLin_Temp_profile_Cu() # Calc and plot concentration profile for Cu, linear temp. increase
 #    stabilityCheck(analytical,fin_diff) # Comparison analytical and finite differences
 #    print("--- %s seconds ---" % (time.time() - start_time))
     
