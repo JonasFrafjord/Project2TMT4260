@@ -91,7 +91,8 @@ def NextR(k_temp, t_temp, dt_temp, D_temp, r_init, r_prev):
 
 #Isokinetical solution, Normalized Volume Fraction of Spherical Particle for Two-Step annealing, LONG TIMES    
 def VolFrac(k_temp,t_temp,D_temp,r_init):
-    return (1 - k_temp*D_temp*t_temp/r_init**2)**(3/2)  
+    if k_temp*D_temp*t_temp/r_init**2>1: return 0
+    return (1.0 - k_temp*D_temp*t_temp/r_init**2)**(3.0/2.0)  
 
 def CAnal(r,R,T,D,t,C_i_T):
     if((r-dx/2) <= R):
@@ -200,11 +201,10 @@ def fin_diff(T1,T2,RSR_ch):
             Sparse = createSparse(D_2,D_Z)
         if (VF_iso_temp > 0):
             VF_isokin[i] = VF_iso_temp
-        if (RSR_num_temp > 0):
+ #       if (RSR_num_temp > 0):
             VF_num[i]= (RSR_num_temp/r_0)**3
             RSR_num[i] = RSR_num_temp
         i_time = i_time +1
-    print(i_time,Nt)
     plt.figure()
     plt.plot(x_bar,U)
     #plt.ylim(-1.1,1.1)
