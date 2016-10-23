@@ -84,7 +84,7 @@ def k_f(C_it):
     return 2*(C_it-C_0)/(C_p-C_it) # NB! Whelan definition
    
 #Analytical normalized (relative) radius of spherical precipitate (3D case)    
-def Bf(k,t,D,r_init):
+def R_f(k,t,D,r_init):
 #Check if short time or long term solution should be used.     
 #    LongTerm = -k*D/(2*(r_0-k*D*t/(2*r_0)-k/(np.sqrt(D*t/pi))))
 #    ShortTerm = -k/2*np.sqrt(D/(pi*t))   
@@ -101,6 +101,7 @@ def NextVolFracNum():
 def VolFrac(k_temp,D_temp,t_temp):
     return (1 - k_temp*D_temp*t_temp/r_0**2)**(2/3)  
     
+
 #print(C_i, np.sqrt(D_1),k_fun(C_i), "C_i, D_1, k")
 #print(pi/D_1*B_0**2/k_fun(C_i)**2, "Tid")
 
@@ -174,12 +175,12 @@ def saveFig(xVecT,CVecT,timeT,figNameT):
     plt.rcParams.update({'font.size': 18})
     plt.savefig(figNameT,transparant=True)
 
-          
+
 def NextR(D_temp, k_temp, t_temp, dt_temp, R_prev):
     R_temp = R_prev
     return R_temp
 
-def fin_diff_two_step(T1,T2,RSR_ch):
+def fin_diff(T1,T2,RSR_ch):
     if T1==T2:
         ShouldChange = False
     else:
@@ -206,33 +207,32 @@ def fin_diff_two_step(T1,T2,RSR_ch):
     RSR_isokin = np.zeros(np.size(t))
     RSR_num = np.zeros(np.size(t))
     RSR_num[0] = 1.0
-    D_RPT = D_1
-    B_RPT = B_0
-    t_RPT = 0
-    T_RPT = T1
+    D_RSR = D_1
+    B_RSR = B_0
+    t_RSR = 0
+    T_RSR = T1
     i_time = 0
-    C_i_RPT = C_i_f(T_RPT)
-    k_RPT = k_f(C_i_RPT)
-    print('k_RPT is {}'.format(k_RPT))
+    C_i_RSR = C_i_f(T_RSR)
+    k_RSR = k_f(C_i_RSR)
+    print('k_RSR is {}'.format(k_RSR))
     print('D1 is {0}, and D2 is {1}'.format(D_1,D_2))
-    print('b0 is {}'.format(B_RPT))
+    print('b0 is {}'.format(B_RSR))
 
     for i in range(Nt):
         U = nextTimeSparse(U, Sparse)
         # Insert boundary conditions
         for j in range(round(r_0/dx)+1):
             U[j] = C_p # inf BC
+            U[index_cutoff] = C_i_RSR
         U[N] = 0
-        RSR_temp = Bf(k_f(C_i_RPT),dt*i_time,D_RPT,B_RPT)
+        RSR_temp = R_f(k_f(C_i_RSR),dt*i_time,D_RSR,B_RSR)
         if (RSR_temp < RSR_ch and ShouldChange):
             print("Yes")
-            D_RPT = D_hi
-            B_RPT = RSR_temp
+            D_RSR = D_2
+            B_RSR = RSR_temp
             i_time = 0
-            NotChanged = False
-            subsup = np.zeros(N)+alpha
-            diag = np.zeros(N+1)+1-2*alpha
-            sparse = scipy.sparse.diags(np.array([subsup,diag,subsup]), [-1,0,1])
+            ShouldChange = False
+            sparse = createSparse(D_2,D_z)
         if (RSR_temp > 0):
             RSR_isokin[i] = RSR_temp
         i_time = i_time +1
