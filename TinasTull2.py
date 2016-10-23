@@ -12,6 +12,7 @@ Jonas Kristoffer Sunde
 TMT4260 Modellering av Fasetransformasjonar
 Team 1
 Project 2, Part 2A
+3D
 """
 import sys
 import numpy as np
@@ -182,34 +183,26 @@ def finite_diff():
 #    plt.figure()
 #    plt.plot(t, RSR_isokin)
             
-def NextBnum():
-    dt = alpha*dx**2/D_1
-    Nt = math.ceil(t_i/dt)
-    t = np.linspace(0, t_i, Nt+1)
-    Bnum = np.zeros(Nt+1)
-    Bnum[0] = 1
-    for i in range(Nt):
-        Bnum[i+1] = Bnum[i]-dt*k_f(C_i)*np.sqrt(D_1/(pi*dt*(i+1)))/(B_0*2)
-    plt.figure()
-    plt.ylim(-0.1,1.1) 
-    plt.plot(t,Bnum)
+def NextR(D_temp, k_temp, t_temp, dt_temp, R_prev):
+    R_temp = R_prev
+    return R_temp
 
 def fin_diff_two_step(T1,T2,RSR_ch):
     if T1==T2:
         ShouldChange = False
     else:
         ShouldChange = True
-
-    # Spatial discretization
-    # Temporal discretisation
+    #Diffusivity at 1.st stage and 2.nd stage
     D_1 = Diffusivity(T1)
     D_2 = Diffusivity(T2)
     D_Z = max(D_1,D_2)
+
+    # Temporal discretisation
     dt = alpha*dx**2/D_Z       # D_hi will give the lowest dt, use it to be sure we respect the stability criterion
     Nt = math.ceil(t_i/dt)
     t = np.linspace(0, t_i, Nt+1) # Mesh points in time
     
- # Create initial concentration vectors
+    # Create initial concentration vectors
     index_cutoff = round(r_0/dx)+1
     U = np.append(np.zeros(index_cutoff)+1,np.zeros(N-index_cutoff+1))
     U[index_cutoff] = 0.5
@@ -219,9 +212,8 @@ def fin_diff_two_step(T1,T2,RSR_ch):
 
     #Solve for every timestep
     RSR_isokin = np.zeros(np.size(t))
-    RPT_isokin = np.zeros(np.size(t))
-    RPT_num = np.zeros(np.size(t))
-    RPT_num[0] = 1.0
+    RSR_num = np.zeros(np.size(t))
+    RSR_num[0] = 1.0
     D_RPT = D_1
     B_RPT = B_0
     t_RPT = 0
@@ -254,8 +246,10 @@ def fin_diff_two_step(T1,T2,RSR_ch):
         i_time = i_time +1
     print(i_time,Nt)
     plt.figure()
-    plt.plot(t,RSR_isokin)
-    plt.ylim(0,1.1)
+    plt.plot(x_bar,U)
+ #   plt.figure()
+ #   plt.plot(t,RSR_isokin)
+ #   plt.ylim(0,1.1)
 
 
 def main(argv):
