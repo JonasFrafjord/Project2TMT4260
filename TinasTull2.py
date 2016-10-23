@@ -11,12 +11,8 @@ Jonas Frafjord
 Jonas Kristoffer Sunde
 TMT4260 Modellering av Fasetransformasjonar
 Team 1
-<<<<<<< HEAD
-Project 2, Part 2B
-=======
 Project 2, Part 2A
 3D
->>>>>>> edb86c962ae4a390471a261226d257e82a89d4de
 """
 import sys
 import numpy as np
@@ -52,10 +48,7 @@ C_0=0.0  # [at]
 "Spacial and temporal discretisation"
 N = 300 # Number of spacial partitions of bar
 L = 1.5 # [um] Length of barH = 30.0 
-#t_i = 0.1 # senconds for isothermal annealing
-t_i = 1e-1 # senconds for isothermal annealing
-#T1 = 1e3+T_K # [K] Temperature           
-T_1 = T_i # [K] Temperature           
+t_i = 2e1 # senconds for isothermal annealing
 x_bar = np.linspace(0,L,N+1)
 dx = L/N   # Need N+1 x points, where [N/2] is centered in a 0-indexed array
 # The stability criterion for the explicit finite difference scheme must be fulfilled
@@ -89,13 +82,17 @@ def R_f(k,t,D,r_init):
     #NB! Only short time in exercise, do not need to check. 
     return (r_init-k*D*t/(2*r_init)-k*np.sqrt((D*t)/pi))/r_0 # Short time solution
 
-#Numerical, Normalized Volume Fraction of Spherical Particle for Two-Step annealing, LONG TIMES
-def NextVolFracNum():
-    return 
-    
-#Analytical, Normalized Volume Fraction of Spherical Particle for Two-Step annealing, LONG TIMES    
-def VolFrac(k_temp,D_temp,t_temp):
-    return (1 - k_temp*D_temp*t_temp/r_0**2)**(2/3)  
+def NextR(k_temp, t_temp, dt_temp, D_temp, r_init, r_prev):
+    if k_temp*D_temp*t_temp > r_0**2: return 0
+    if t_temp < 0:
+        r_temp = r_prev - (dt_temp*k_temp/2*(D_temp/r_prev + np.sqrt(D_temp/(pi*t_temp))))
+    else:
+        r_temp = np.sqrt(r_0**2-k_temp*D_temp*t_temp)
+    return r_temp
+
+#Isokinetical solution, Normalized Volume Fraction of Spherical Particle for Two-Step annealing, LONG TIMES    
+def VolFrac(k_temp,t_temp,D_temp,r_init):
+    return (1 - k_temp*D_temp*t_temp/r_init**2)**(3/2)  
 
 def CAnal(r,R,T,D,t,C_i_T):
     if((r-dx/2) <= R):
@@ -119,15 +116,8 @@ def AnalConc():
     plt.xlabel('r [um]')
     plt.ylabel('Concentration [mol/um]')
     plt.title('3D Analytic concentration profile of Si after %d seconds annealing at %d K' % (t_i, T_i))
-    plt.legend(bbox_to_anchor=(0.2,1))
-    plt.rcParams.update({'font.size': 18})
+    #plt.rcParams.update({'font.size': 18})
     return Conc
-       
-def Nextr(D_temp, k_temp, t_temp, dt_temp, r_prev):
-    r_temp = r_prev - dt_temp*k_temp/(2*r_0)*(D_temp/r_prev + np.sqrt(D_temp/(pi*t_temp)))
-    if r_temp < 0:
-        return 0
-    return r_temp
     
 #def t_star(k,D): trenger ikke denne?... 
 #    return t_r*(k_r*B_0)**2*D_r/(D*(k*B_0r)**2)
@@ -148,10 +138,6 @@ def nextTimeSparse(CVecT, ASparseT):
     return CVecT*ASparseT
     
 
-def NextR(D_temp, k_temp, t_temp, dt_temp, R_prev):
-    R_temp = R_prev
-    return R_temp
-
 def fin_diff(T1,T2,RSR_ch):
     if T1==T2:
         ShouldChange = False
@@ -164,7 +150,7 @@ def fin_diff(T1,T2,RSR_ch):
 
     #Variables needed in this module
     D_RSR = D_1
-    B_RSR = B_0
+    R_RSR = r_0
     t_RSR = 0
     T_RSR = T1
     i_time = 0
@@ -184,16 +170,19 @@ def fin_diff(T1,T2,RSR_ch):
 
     # Create diag, sub and super diag for tridiag
     Sparse = createSparse(D_1,D_Z)
-    
-    # Arrays of RSR
-    RSR_isokin = np.zeros(np.size(t))
-    RSR_num = np.zeros(np.size(t))
-    RSR_num[0] = 1.0
 
     #Solve for every timestep
+    
+    RSR_num = np.zeros(np.size(t))
+    RSR_num[0] = r_0
+    RSR_anal = np.zeros(np.size(t))
+    VF_num = np.zeros(np.size(t))
+    VF_num[0] = 1.0
+    VF_isokin = np.zeros(np.size(t))      
+    
     print('k_RSR is {}'.format(k_RSR))
     print('D1 is {0}, and D2 is {1}'.format(D_1,D_2))
-    print('b0 is {}'.format(B_RSR))
+    print('b0 is {}'.format(R_RSR))
 
     for i in range(Nt):
         U = nextTimeSparse(U, Sparse)
@@ -201,31 +190,43 @@ def fin_diff(T1,T2,RSR_ch):
         U[index_cutoff-1] = C_p # inf BC
         U[index_cutoff] = C_i_RSR
         U[N] = 0
-        RSR_temp = R_f(k_RSR,dt*i_time,D_RSR,B_RSR)
-        if (RSR_temp < RSR_ch and ShouldChange):
+        RSR_anal[i] = R_f(k_RSR,dt*i_time,D_RSR,R_RSR)
+        RSR_num_temp = NextR(k_RSR,dt*i_time,dt,D_RSR,R_RSR,RSR_num[i-1])
+        VF_iso_temp = VolFrac(k_RSR,dt*i_time,D_RSR,R_RSR)
+        
+        if (RSR_num_temp < RSR_ch and ShouldChange):
             print('T1 and T2 are different')
             D_RSR = D_2
-            B_RSR = RSR_temp
+            R_RSR = RSR_num_temp
             i_time = 0
             ShouldChange = False
-            sparse = createSparse(D_2,D_z)
-        if (RSR_temp > 0):
-            RSR_isokin[i] = RSR_temp
+            sparse = createSparse(D_2,D_Z)
+        if (VF_iso_temp > 0):
+            VF_isokin[i] = VF_iso_temp
+        if (RSR_num_temp > 0):
+            VF_num[i]= (RSR_num_temp/r_0)**3
+            RSR_num[i] = RSR_num_temp
         i_time = i_time +1
     print(i_time,Nt)
     plt.figure()
     plt.plot(x_bar[index_cutoff::],U[index_cutoff::])
     plt.ylim(-1.1,1.1)
- #   plt.figure()
- #   plt.plot(t,RSR_isokin)
- #   plt.ylim(0,1.1)
-
+#    plt.figure()
+#    plt.plot(t,RSR_num)
+#    plt.plot(t,RSR_anal,',')
+#    plt.ylim(0,1.1)
+#    plt.figure()
+#    plt.plot(t,VF_num)
+#    plt.plot(t,VF_isokin,',')
+#    plt.ylim(0,1.1)
+#    plt.xlim(0,21)
 
 def main(argv):
     analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
  #   finite_diff() # Calc and plot concentration profiles, finite differences
     #Plate_thickness()    
     fin_diff(T_low,T_low,0.3)
+#    fin_diff(T_low,T_hi,0.3)
  #   NextBnum()
     plt.show()
 #    fin_diff_wLin_Temp_profile_Cu() # Calc and plot concentration profile for Cu, linear temp. increase
