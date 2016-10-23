@@ -40,7 +40,7 @@ T_low = 400.0+T_K
 T_hi = 430.0+T_K
 
 "From table 1 in Bjørneklett"
-C_star=2.17e3 # wt%/100
+C_star=2.17e3 # wt%
 DeltaH=50.8e3 # [J/mol]
 D_0 = 3.46e7 # [um^2*s^-1]
 Q = 123.8e3 # [J/mol]
@@ -48,10 +48,6 @@ B_0=1e-3 # [um]
 r_0=0.025 # [um]
 C_p=1.0e2 # [at%]
 C_0=0.0  # [at]      
-
-#Diffusivity for T_i
-D_i = D_0*np.exp(-Q/(R*T_i))
-
 
 "Spacial and temporal discretisation"
 N = 300 # Number of spacial partitions of bar
@@ -100,19 +96,6 @@ def NextVolFracNum():
 #Analytical, Normalized Volume Fraction of Spherical Particle for Two-Step annealing, LONG TIMES    
 def VolFrac(k_temp,D_temp,t_temp):
     return (1 - k_temp*D_temp*t_temp/r_0**2)**(2/3)  
-    
-
-#print(C_i, np.sqrt(D_1),k_fun(C_i), "C_i, D_1, k")
-#print(pi/D_1*B_0**2/k_fun(C_i)**2, "Tid")
-
-#Calculate the concentration on the particle surface at the temperature T_i
-def C_i_f(Ttemp):
-    return C_star*np.exp(-DeltaH/(R*Ttemp))
-#print(Csurf(T_i))
-
-# Use for non-isothermal
-#def C(x,r,T,D,t):
-#    return Csurf(T)-(Csurf(T)-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
 
 def CAnal(r,R,T,D,t,C_i_T):
     if((r-dx/2) <= R):
@@ -128,6 +111,7 @@ def CAnal(r,R,T,D,t,C_i_T):
  # Plot the analytical solution with constant diffusivity (D(x) = D = const.)
 def AnalConc():
     C_i_T = C_i_f(T_i)
+    D_i = Diffusivity(T_i)
     Conc = [CAnal(i,r_0,T_i,D_i,t_i,C_i_T) for i in x_bar]
     plt.plot(x_bar,Conc) #label='Si'
     plt.xlim(0, L)
@@ -163,18 +147,6 @@ def nextTime(CVecT, AMatT):
 def nextTimeSparse(CVecT, ASparseT):
     return CVecT*ASparseT
     
-#def saveFig(xVecT,CVecT,timeT,tempT,figNameT):
-def saveFig(xVecT,CVecT,timeT,figNameT):
-    plt.plot(xVecT, CVecT, label='Cu') # NB! Change metal name if calc. anim. for Ni
-    plt.xlim(-1, 1)
-    plt.ylim(0, 1.1)
-    plt.xlabel('x [mm]')
-    plt.ylabel('Concentration [mol/mm]')
-    plt.title('Concentration profile after %d hours annealing at %d K' % (timeT, T_anneal))
-    plt.legend(bbox_to_anchor=(0.2,1))
-    plt.rcParams.update({'font.size': 18})
-    plt.savefig(figNameT,transparant=True)
-
 
 def NextR(D_temp, k_temp, t_temp, dt_temp, R_prev):
     R_temp = R_prev
@@ -185,10 +157,20 @@ def fin_diff(T1,T2,RSR_ch):
         ShouldChange = False
     else:
         ShouldChange = True
-    #Diffusivity at 1.st stage and 2.nd stage
+   #Diffusivity at 1.st stage and 2.nd stage
     D_1 = Diffusivity(T1)
     D_2 = Diffusivity(T2)
     D_Z = max(D_1,D_2)
+
+    #Variables needed in this module
+    D_RSR = D_1
+    B_RSR = B_0
+    t_RSR = 0
+    T_RSR = T1
+    i_time = 0
+    C_i_RSR = C_i_f(T_RSR)
+    k_RSR = k_f(C_i_RSR)
+
 
     # Temporal discretisation
     dt = alpha*dx**2/D_Z       # D_hi will give the lowest dt, use it to be sure we respect the stability criterion
@@ -197,23 +179,18 @@ def fin_diff(T1,T2,RSR_ch):
     
     # Create initial concentration vectors
     index_cutoff = round(r_0/dx)+1
-    U = np.append(np.zeros(index_cutoff)+1,np.zeros(N-index_cutoff+1))
-    U[index_cutoff] = 0.5
+    U = np.append(np.zeros(index_cutoff)+C_p,np.zeros(N-index_cutoff+1))
+    U[index_cutoff] = C_i_RSR
 
     # Create diag, sub and super diag for tridiag
     Sparse = createSparse(D_1,D_Z)
-
-    #Solve for every timestep
+    
+    # Arrays of RSR
     RSR_isokin = np.zeros(np.size(t))
     RSR_num = np.zeros(np.size(t))
     RSR_num[0] = 1.0
-    D_RSR = D_1
-    B_RSR = B_0
-    t_RSR = 0
-    T_RSR = T1
-    i_time = 0
-    C_i_RSR = C_i_f(T_RSR)
-    k_RSR = k_f(C_i_RSR)
+
+    #Solve for every timestep
     print('k_RSR is {}'.format(k_RSR))
     print('D1 is {0}, and D2 is {1}'.format(D_1,D_2))
     print('b0 is {}'.format(B_RSR))
@@ -221,13 +198,12 @@ def fin_diff(T1,T2,RSR_ch):
     for i in range(Nt):
         U = nextTimeSparse(U, Sparse)
         # Insert boundary conditions
-        for j in range(round(r_0/dx)+1):
-            U[j] = C_p # inf BC
-            U[index_cutoff] = C_i_RSR
+        U[index_cutoff-1] = C_p # inf BC
+        U[index_cutoff] = C_i_RSR
         U[N] = 0
-        RSR_temp = R_f(k_f(C_i_RSR),dt*i_time,D_RSR,B_RSR)
+        RSR_temp = R_f(k_RSR,dt*i_time,D_RSR,B_RSR)
         if (RSR_temp < RSR_ch and ShouldChange):
-            print("Yes")
+            print('T1 and T2 are different')
             D_RSR = D_2
             B_RSR = RSR_temp
             i_time = 0
@@ -238,7 +214,8 @@ def fin_diff(T1,T2,RSR_ch):
         i_time = i_time +1
     print(i_time,Nt)
     plt.figure()
-    plt.plot(x_bar,U)
+    plt.plot(x_bar[index_cutoff::],U[index_cutoff::])
+    plt.ylim(-1.1,1.1)
  #   plt.figure()
  #   plt.plot(t,RSR_isokin)
  #   plt.ylim(0,1.1)
@@ -248,7 +225,7 @@ def main(argv):
     analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
  #   finite_diff() # Calc and plot concentration profiles, finite differences
     #Plate_thickness()    
-    fin_diff_two_step(T_low,T_low,0.3)
+    fin_diff(T_low,T_low,0.3)
  #   NextBnum()
     plt.show()
 #    fin_diff_wLin_Temp_profile_Cu() # Calc and plot concentration profile for Cu, linear temp. increase
