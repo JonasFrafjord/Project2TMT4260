@@ -11,7 +11,7 @@ Jonas Frafjord
 Jonas Kristoffer Sunde
 TMT4260 Modellering av Fasetransformasjonar
 Team 1
-Project 2, Part 2A
+Project 2, Part 2B
 """
 import sys
 import numpy as np
@@ -44,7 +44,7 @@ C_0=0.0  # [at]
 C_i = C_star*np.exp(-DeltaH/(R*T_i))
 
 #Diffusivity for T_i
-D_1 = D_0*np.exp(-Q/(R*T_i))
+D_i = D_0*np.exp(-Q/(R*T_i))
 
 
 "Spacial and temporal discretisation"
@@ -70,23 +70,39 @@ def Diffusivity(T):
 def k_fun(C_it):
     return 2*(C_it-C_0)/(C_p-C_0)
     
-def Bf(k,t,D,B_init):
-    return (B_init-k*(np.sqrt((D*t)/pi)))/B_0
+#Analytical normalized (relative) radius of spherical precipitate (3D case)    
+def Bf(k,t,D,r_init):
+#Check if short time or long term solution should be used.     
+#    LongTerm = -k*D/(2*(r_0-k*D*t/(2*r_0)-k/(np.sqrt(D*t/pi))))
+#    ShortTerm = -k/2*np.sqrt(D/(pi*t))   
+  #  if  LongTerm > ShortTerm*10:
+   #     return np.sqrt(1-k*D*t/B_init**2) # Long time solution
+    #NB! Only short time in exercise, do not need to check. 
+    return (r_init-k*D*t/(2*r_init)-k*np.sqrt((D*t)/pi))/r_0 # Short time solution
+
+#Numerical, Normalized Volume Fraction of Spherical Particle for Two-Step annealing, LONG TIMES
+def NextVolFracNum():
+    return 
+    
+#Analytical, Normalized Volume Fraction of Spherical Particle for Two-Step annealing, LONG TIMES    
+def VolFrac(k_temp,D_temp,t_temp):
+    return (1 - k_temp*D_temp*t_temp/r_0**2)**(2/3)  
+    
 #print(C_i, np.sqrt(D_1),k_fun(C_i), "C_i, D_1, k")
 #print(pi/D_1*B_0**2/k_fun(C_i)**2, "Tid")
 
 #Calculate the concentration on the particle surface at the temperature T_i
-def Csurf(T):
-    return C_star*np.exp(-DeltaH/(R*T))
+def C_i_f(Ttemp):
+    return C_star*np.exp(-DeltaH/(R*Ttemp))
 #print(Csurf(T_i))
 
 # Use for non-isothermal
 #def C(x,r,T,D,t):
 #    return Csurf(T)-(Csurf(T)-C_0)*scipy.special.erf((x-r)/(2.0*np.sqrt(D*t)))
-def C(z,r,T,D,t):
+def C(z,r,Temp,D,t):
     if((z-dx/2) <= r):
         return C_p
-    return C_0-(C_p-C_0)*(r/z)*(1-scipy.special.erf((z-r)/(2.0*np.sqrt(D*t))))
+    return C_0-(C_i_f(Temp)-C_0)*(r/z)*(1-scipy.special.erf((z-r)/(2.0*np.sqrt(D*t))))
             
 #print(C(3,r_0,T_i,Diffusivity(T_i),t_i))
 
@@ -96,6 +112,7 @@ def C(z,r,T,D,t):
  # Plot the analytical solution with constant diffusivity (D(x) = D = const.)
 def AnalConc():
     Conc = [C(i,r_0,T_i,Diffusivity(T_i),t_i) for i in x_bar]
+    plt.figure()    
     plt.plot(x_bar,Conc) #label='Si'
     plt.xlim(0, L)
     plt.ylim(-1.1, 1.1)
@@ -106,7 +123,11 @@ def AnalConc():
     plt.rcParams.update({'font.size': 18})
     return Conc
        
-
+def Nextr(D_temp, k_temp, t_temp, dt_temp, r_prev):
+    r_temp = r_prev - dt_temp*k_temp/(2*r_0)*(D_temp/r_prev + np.sqrt(D_temp/(pi*t_temp)))
+    if r_temp < 0:
+        return 0
+    return r_temp
     
 #def t_star(k,D): trenger ikke denne?... 
 #    return t_r*(k_r*B_0)**2*D_r/(D*(k*B_0r)**2)
@@ -138,9 +159,19 @@ def saveFig(xVecT,CVecT,timeT,figNameT):
     plt.rcParams.update({'font.size': 18})
     plt.savefig(figNameT,transparant=True)
 
-def finite_diff():
+def fin_diff(T1,T2,var):
+    if T1==T2:
+        ShouldChange = False
+    else:
+        ShouldChange = True
+ 
+    D_1 = Diffusivity(T1)
+    D_2 = Diffusivity(T2)
+    D_Z = max(D_1,D_2) 
+ 
     # Spatial discretisation is global
     # Temporal discretisation
+ 
     dt = alpha*dx**2/D_1
     Nt = math.ceil(t_i/dt)
     t = np.linspace(0, t_i, Nt) # mesh points in time
@@ -148,104 +179,62 @@ def finite_diff():
     # Create initial concentration vectors
     U = np.append(np.zeros(int(r_0/dx)+1)+1,np.zeros(N-int((r_0)/dx)))
     U[int(r_0/dx)+1] = 0.5
-    
-    # Create diag, sub and super diag for tridiag
-    #subsup = np.zeros(N)+alpha      #sub and super is equivalent
-    #diag = np.zeros(N+1)+1-2*alpha    #diagonal
-    #Sparse = scipy.sparse.diags(np.array([subsup,diag,subsup]), [-1,0,1])
+   
+    # Create the sparse matrix
     Sparse=createSparse(D_1,D_1)
     
-    #Solve for every timestep
-    plate_thickness_bar = np.zeros(np.size(t))
+    #Solve for every timestep. RSR=relative sphere radius
+    RSR_num = np.zeros(np.size(t))
+    RSR_num[0] = 1.0
+    RVF_isokin = np.zeros(np.size(t))
+    RSR_num = np.zeros(np.size(t))
+    RSR_num[0] = 1.0
+    D_RSR = D_1
+    r_RSR = B_0
+    t_RSR = 0
+    T_RSR = T1
+    ij = 0
+    k_RSR = k_fun(C_i_f(T_RSR))
+    
     for i in range(Nt):
         U = nextTimeSparse(U, Sparse)
         # Insert boundary conditions
         for j in range(round(r_0/dx)+1):
             U[j] = C_p # inf BC
         U[N] = 0
-        relative_plate_thickness = Bf(k_fun(C_i),dt*i,D_1,B_0)
-        if (relative_plate_thickness > 0):
-            plate_thickness_bar[i] = relative_plate_thickness
-    plt.figure()
+        RSR_temp = Bf(k_fun(C_i),dt*i,D_RSR,r_0)
+        if (RSR_temp < var and ShouldChange):
+            D_RSR = D_2
+            r_RSR= RSR_temp*r_RSR
+            t_RSR = dt*i
+            T_RSR = T2
+            k_RSR = k_f(C_i_f(T_RSR))
+            ShouldChange = False
+            sparse = createSparse(D_2,D_Z)
+            ij = 0
+        
+        if (RSR_temp > 0):
+            RSR_isokin[i] = RSR_temp
+        if (i == 0):
+            ij = ij+1
+            continue
+        RSR_num[i] = Nextr(D_1,k_1, (i+1)*dt,dt,RSR_num[i-1])
+        ij = ij+1
+    plt.figure()    
     plt.plot(x_bar,U)
-    #plt.ylim(0,1.1)
+    plt.ylim(-1.1,1.1)
+    plt.title('Numerical concentration profile in 3D for isothermal annealing at %d K for %d seconds' %(T_i,t_i))
     plt.figure()
-    plt.plot(t, plate_thickness_bar)
-            
-def NextBnum():
-    dt = alpha*dx**2/D_1
-    Nt = math.ceil(t_i/dt)
-    t = np.linspace(0, t_i, Nt+1)
-    Bnum = np.zeros(Nt+1)
-    Bnum[0] = 1
-    for i in range(Nt):
-        Bnum[i+1] = Bnum[i]-dt*k_fun(C_i)*np.sqrt(D_1/(pi*dt*(i+1)))/(B_0*2)
+    plt.plot(t, sphere_radius)
+    plt.title('Analytical normalized sphere radius (3D) for isothermal annealing at %d K for %d seconds' %(T_i,t_i))
     plt.figure()
-    plt.ylim(-0.1,1.1) 
-    plt.plot(t,Bnum)
-
-def fin_diff_two_step(T1,T2):
-    T1 = 400+T_K
-    T2 = 430+T_K
-    
-    # Spatial discretization
-    # Temporal discretisation
-    D_low = Diffusivity(T1)
-    D_hi = Diffusivity(T2)
-    print(D_low/D_hi)
-    dt = alpha*dx**2/D_hi        # D_hi will give the lowest dt, use it to be sure we respect the stability criterion
-    Nt = math.ceil(t_i/dt)
-    t = np.linspace(0, t_i, Nt+1) # Mesh points in time
-    
- # Create initial concentration vectors
-    U = np.append(np.zeros(int(r_0/dx)+1)+1,np.zeros(N-int((r_0)/dx)))
-    U[int(r_0/dx)+1] = 0.5 # Since initial value is undefined at x = 0, we set it to 0.5 which also smoothens the graph
-
-    # Create diag, sub and super diag for tridiag
-    subsup = np.zeros(N)+alpha*D_low/D_hi      #sub and super is equivalent
-    diag = np.zeros(N+1)+1-2*alpha*D_low/D_hi    #diagonal
-    Sparse = scipy.sparse.diags(np.array([subsup,diag,subsup]), [-1,0,1])
-
-    #Solve for every timestep
-    plate_thickness_bar = np.zeros(np.size(t))
-    NotChanged = True
-    D_RPT = D_low
-    B_RPT = B_0
-    i_time = 0
-    for i in range(Nt):
-        U = nextTimeSparse(U, Sparse)
-        # Insert boundary conditions
-        for j in range(round(r_0/dx)+1):
-            U[j] = C_p # inf BC
-        U[N] = 0
-        relative_plate_thickness = Bf(k_fun(C_i),dt*i_time,D_RPT,B_RPT)
-        if (relative_plate_thickness < 0.3 and NotChanged):
-            print("Yes")
-            D_RPT = D_hi
-            B_RPT = relative_plate_thickness
-            i_time = 0
-            NotChanged = False
-            subsup = np.zeros(N)+alpha
-            diag = np.zeros(N+1)+1-2*alpha
-            sparse = scipy.sparse.diags(np.array([subsup,diag,subsup]), [-1,0,1])
-        if (relative_plate_thickness > 0):
-            plate_thickness_bar[i] = relative_plate_thickness
-        i_time = i_time +1
-    print(i_time,Nt)
-    plt.figure()
-    plt.plot(t,plate_thickness_bar)
-    plt.ylim(0,1.1)
-
+    plt.plot(t, RSR_num)
+    plt.title('Numerical normalized sphere radius (3D) for isothermal annealing at %d K for %d seconds' %(T_i,t_i))
 
 def main(argv):
     analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
     finite_diff() # Calc and plot concentration profiles, finite differences
-    #Plate_thickness()    
- #   fin_diff_two_step()
- #   NextBnum()
-    plt.show()
-#    fin_diff_wLin_Temp_profile_Cu() # Calc and plot concentration profile for Cu, linear temp. increase
-    
+    plt.show() 
 #    stabilityCheck(analytical,fin_diff) # Comparison analytical and finite differences
 #    print("--- %s seconds ---" % (time.time() - start_time))
     
