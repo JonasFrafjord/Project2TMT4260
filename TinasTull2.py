@@ -48,7 +48,7 @@ C_0=0.0  # [at]
 "Spacial and temporal discretisation"
 N = 300 # Number of spacial partitions of bar
 L = 1.5 # [um] Length of barH = 30.0 
-t_i = 2e1 # senconds for isothermal annealing
+t_i = 1e1 # senconds for isothermal annealing
 x_bar = np.linspace(0,L,N+1)
 dx = L/N   # Need N+1 x points, where [N/2] is centered in a 0-indexed array
 # The stability criterion for the explicit finite difference scheme must be fulfilled
@@ -69,7 +69,6 @@ def Diffusivity(T):
     return D_0*np.exp(-Q/(R*T))
 
 def k_f(C_it):
-    #return 2*(C_it-C_0)/(C_p-C_0)
     return 2*(C_it-C_0)/(C_p-C_it) # NB! Whelan definition
    
 #Analytical normalized (relative) radius of spherical precipitate (3D case)    
@@ -97,7 +96,7 @@ def VolFrac(k_temp,t_temp,D_temp,r_init):
 def CAnal(r,R,T,D,t,C_i_T):
     if((r-dx/2) <= R):
         return C_i_T
-    return C_0-(C_i_T-C_0)*(R/r)*(1-scipy.special.erf((r-R)/(2.0*np.sqrt(D*t))))
+    return C_0+(C_i_T-C_0)*(R/r)*(1-scipy.special.erf((r-R)/(2.0*np.sqrt(D*t))))
 
             
 #print(C(3,r_0,T_i,Diffusivity(T_i),t_i))
@@ -164,8 +163,8 @@ def fin_diff(T1,T2,RSR_ch):
     t = np.linspace(0, t_i, Nt+1) # Mesh points in time
     
     # Create initial concentration vectors
-    index_cutoff = round(r_0/dx)+1
-    U = np.append(np.zeros(index_cutoff)+C_p,np.zeros(N-index_cutoff+1))
+    index_cutoff = round(r_0/dx)
+    U = np.append(np.zeros(index_cutoff)+C_p,np.zeros(N-index_cutoff+1)+C_0)
     U[index_cutoff] = C_i_RSR
 
     # Create diag, sub and super diag for tridiag
@@ -186,10 +185,8 @@ def fin_diff(T1,T2,RSR_ch):
 
     for i in range(Nt):
         U = nextTimeSparse(U, Sparse)
-        # Insert boundary conditions
-        U[index_cutoff-1] = C_p # inf BC
-        U[index_cutoff] = C_i_RSR
-        U[N] = 0
+        # Insert boundary conditions       
+        U[N] = C_0
         RSR_anal[i] = R_f(k_RSR,dt*i_time,D_RSR,R_RSR)
         RSR_num_temp = NextR(k_RSR,dt*i_time,dt,D_RSR,R_RSR,RSR_num[i-1])
         VF_iso_temp = VolFrac(k_RSR,dt*i_time,D_RSR,R_RSR)
@@ -209,10 +206,10 @@ def fin_diff(T1,T2,RSR_ch):
         i_time = i_time +1
     print(i_time,Nt)
     plt.figure()
-    plt.plot(x_bar[index_cutoff::],U[index_cutoff::])
-    plt.ylim(-1.1,1.1)
-#    plt.figure()
-#    plt.plot(t,RSR_num)
+    plt.plot(x_bar,U)
+    #plt.ylim(-1.1,1.1)
+    plt.figure()
+    plt.plot(t,RSR_num)
 #    plt.plot(t,RSR_anal,',')
 #    plt.ylim(0,1.1)
 #    plt.figure()
