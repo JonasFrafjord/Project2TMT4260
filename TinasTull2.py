@@ -92,7 +92,8 @@ def NextR(k_temp, t_temp, dt_temp, D_temp, r_init, r_prev):
 
 #Isokinetical solution, Normalized Volume Fraction of Spherical Particle for Two-Step annealing, LONG TIMES    
 def VolFrac(k_temp,t_temp,D_temp,r_init):
-    return (1 - k_temp*D_temp*t_temp/r_init**2)**(3/2)  
+    if k_temp*D_temp*t_temp/r_init**2>1: return 0
+    return (1.0 - k_temp*D_temp*t_temp/r_init**2)**(3.0/2.0)  
 
 def CAnal(r,R,T,D,t,C_i_T):
     if((r-dx/2) <= R):
@@ -165,7 +166,7 @@ def fin_diff(T1,T2,RSR_ch):
     
     # Create initial concentration vectors
     index_cutoff = round(r_0/dx)+1
-    U = np.append(np.zeros(index_cutoff)+C_p,np.zeros(N-index_cutoff+1))
+    U = np.append(np.zeros(index_cutoff)+C_p,np.zeros(N-index_cutoff+1)+C_0)
     U[index_cutoff] = C_i_RSR
 
     # Create diag, sub and super diag for tridiag
@@ -201,25 +202,24 @@ def fin_diff(T1,T2,RSR_ch):
             i_time = 0
             ShouldChange = False
             sparse = createSparse(D_2,D_Z)
-        if (VF_iso_temp > 0):
+ #       if (VF_iso_temp > 0):
             VF_isokin[i] = VF_iso_temp
-        if (RSR_num_temp > 0):
+ #       if (RSR_num_temp > 0):
             VF_num[i]= (RSR_num_temp/r_0)**3
             RSR_num[i] = RSR_num_temp
         i_time = i_time +1
-    print(i_time,Nt)
     plt.figure()
     plt.plot(x_bar[index_cutoff::],U[index_cutoff::])
     plt.ylim(-1.1,1.1)
-#    plt.figure()
-#    plt.plot(t,RSR_num)
-#    plt.plot(t,RSR_anal,',')
-#    plt.ylim(0,1.1)
-#    plt.figure()
-#    plt.plot(t,VF_num)
-#    plt.plot(t,VF_isokin,',')
-#    plt.ylim(0,1.1)
-#    plt.xlim(0,21)
+    plt.figure()
+    plt.plot(t,RSR_num)
+    plt.plot(t,RSR_anal,',')
+    plt.ylim(0,1.1)
+    plt.figure()
+    plt.plot(t,VF_num)
+    plt.plot(t,VF_isokin,',')
+    plt.ylim(0,1.1)
+    plt.xlim(0,21)
 
 def main(argv):
     analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
