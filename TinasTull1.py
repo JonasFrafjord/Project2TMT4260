@@ -55,7 +55,7 @@ C_02=0.0  # [wt.%]/100
 D_i = D_0*np.exp(-Q/(R*T_i))
 
 "Spatial and temporal discretisation"
-N = 400 # Number of spatial partitions of bar
+N = 300 # Number of spatial partitions of bar
 L = 1.5 # [um] Length of bar 
 t_i = 15 # seconds for isothermal annealing
 x_bar = np.linspace(0,L,N+1)
@@ -169,19 +169,20 @@ def fin_diff(T1,T2,RPT_ch):
     # Temporal discretisation
     D_1 = Diffusivity(T1)
     D_2 = Diffusivity(T2)
-    print('D1 and D2: {0:.3e} um^2/s {1:.3e} um^2/s'.format(D_1,D_2))
+    print('D1 and D2: {0:.3e} um^2/s and {1:.3e} um^2/s\n'.format(D_1,D_2))
     D_Z = max(D_1,D_2)
     dt = alpha*dx**2/D_Z # D_Z will give the lowest dt, use it to be sure we respect the stability criterion
+    print('Time increments dt: {0:.3e} s'.format(dt))    
     Nt = math.ceil(t_i/dt)
+    print('Time steps: %d\n' % Nt)
     t = np.linspace(0, t_i, Nt+1) # Mesh points in time
     
  # Create initial concentration vectors
     # NB small value!
-    index_cutoff = round(B_0/dx)+1 # B_0??
+    index_cutoff = round(B_0/dx)+1 # B_0
     print('index cutoff: %d' % index_cutoff)
-    U = np.append(np.zeros(index_cutoff)+1,np.zeros(N-index_cutoff+1)) # Changed!
+    U = np.append(np.zeros(index_cutoff)+1,np.zeros(N-index_cutoff+1)) # Changed
     #U[index_cutoff] = 0.5 # Since initial value is undefined at x = 0, we set it to 0.5 which also smoothens the graph
-    #U[index_cutoff] = C
     
     # Create sparse
     Sparse = createSparse(D_1,D_Z)
@@ -194,21 +195,20 @@ def fin_diff(T1,T2,RPT_ch):
     RPT_num[0] = 1.0
     D_RPT = D_1
     B_RPT = B_0
-    t_RPT = 0
     T_RPT = T1
-    i_time = 0
+    i_time = 0.0
     C_i_RPT = C_i_f(T_RPT)
     k_RPT = k_f(C_i_RPT)
     t_switch = 0.0
-    print('k_RPT is {}'.format(k_RPT))
-    print('D1 is {0:.3e} um^2/s, and D2 is {1:.3e} um^2/s'.format(D_1,D_2))
+    print('k_RPT is {0:.3e}'.format(k_RPT))
+    #print('D1 is {0:.3e} um^2/s, and D2 is {1:.3e} um^2/s'.format(D_1,D_2))
     print('B0 is {} um'.format(B_RPT))
  #   plt.figure()
     for i in range(Nt):
         U = nextTimeSparse(U, Sparse)
         # Insert boundary conditions
         for j in range(index_cutoff):
-            U[j] = 1.0 # inf BC #???
+            U[j] = 1.0 # inf BC
         #U[index_cutoff] = 0.5
         U[N] = 0
         RPT_temp = Bf(k_RPT,dt*i_time,D_RPT,B_RPT) # returns 1 at first run B_0/B_0
@@ -217,9 +217,8 @@ def fin_diff(T1,T2,RPT_ch):
             print('D_RPT: {0:.3e} um^2/s'.format(D_RPT))
             D_RPT = D_2
             print('Diffusivity changed to: {0:.3e} um^2/s'.format(D_RPT))
-            B_RPT = RPT_temp*B_0 # B_0??? B_RPT # New initial thickness
+            B_RPT = RPT_temp*B_0 # B_0 / B_RPT # New initial thickness
             print('New init thickness: {0:.3e} um'.format(B_RPT))
-            t_RPT = dt*i
             T_RPT = T2 # New temp
             k_RPT = k_f(C_i_f(T_RPT)) # New concentration ratio
             ShouldChange = False
@@ -232,28 +231,20 @@ def fin_diff(T1,T2,RPT_ch):
             i_time = i_time+1
             RPT_num[i] = B_RPT/B_0
             continue
-        RPT_num[i] = NextB(D_RPT,k_RPT, i_time*dt,dt,RPT_num[i-1])
+        RPT_num[i] = NextB(D_RPT,k_RPT,i_time*dt,dt,RPT_num[i-1])
         i_time = i_time+1
         #if any(i*dt<t_i*itt+dt/2 and i*dt>t_i*itt-dt/2 for itt in [1/4,1/2,3/4]):
-           # plt.figure(figsize=(14,10), dpi=120)
-           # plt.plot(x_bar, U, label='After {:.2f}s'.format(i*dt))
-            #plt.plot((B_0, B_0), (C_i_RPT, C_p), 'k-') # (x0,x1)(y0,y1)
-            #plt.xlim(0, L)
-            #plt.ylim(0, 1.1)
-            #plt.xlabel('x [um]')
-            #plt.ylabel('Concentration [mol/um]')
-            #plt.title('Analytic concentration profile of Si  after %d seconds annealing at %d %d K' % (t_i,T1,T2))
-#   exit()
-    #plt.figure(figsize=(14,10), dpi=120)
-    #plt.plot((B_0, B_0), (C_i_RPT, C_p), 'k-') # (x0,x1)(y0,y1)
-    #plt.xlim(0, L)
-    #plt.ylim(0, 1.1)
-    #plt.xlabel('x [um]')
-    #plt.ylabel('Concentration [mol/um]')
-    #plt.title('Analytic concentration profile of Si  after %d seconds annealing at %d %d K' % (t_i,T1,T2))
+        #plt.figure(figsize=(14,10), dpi=120)
+        #plt.plot(x_bar, U, label='After {:.2f}s'.format(i*dt))
+        #plt.plot((B_0, B_0), (C_i_RPT, C_p), 'k-') # (x0,x1)(y0,y1)
+        #plt.xlim(0, L)
+        #plt.ylim(0, 1.1)
+        #plt.xlabel('x [um]')
+        #plt.ylabel('Concentration [mol/um]')
+        #plt.title('Analytic concentration profile of Si  after %d seconds annealing at %d %d K' % (t_i,T1,T2))
   
-  # plt.figure(figsize=(14,10), dpi=120)
-   # plt.plot(x_bar,U,label='After {:.2f}s'.format(t_i))
+    #plt.figure(figsize=(14,10), dpi=120)
+    #plt.plot(x_bar,U,label='After {:.2f}s'.format(t_i))
     #plt.ylim(0, 1.1)
     #plt.legend()
     
@@ -262,9 +253,12 @@ def fin_diff(T1,T2,RPT_ch):
     plt.plot(t,RPT_num,label='Numerical')
     #plt.xlim(0, L)
     plt.ylim(0.0, 1.1)
+    #plt.xlim(0.0, 16.0)
     plt.xlabel('t [s]')
     plt.ylabel('Relative plate thickness B/B_0')
     plt.plot((0.0,t_switch), (RPT_ch, RPT_ch), 'k-') # (x0,x1)(y0,y1)
+    plt.plot((t_switch,t_switch), (0.0, RPT_ch), 'k-') # (x0,x1)(y0,y1)
+    #plt.plot((15.0,15.0), (0.0, 1.0), 'k-') # (x0,x1)(y0,y1)
     plt.title('Relative plate thickness after %d seconds annealing at two-step %d K and %d K temperature change' % (t_i,T1,T2))
     plt.legend()
     plt.rcParams.update({'font.size': 18})
@@ -287,11 +281,11 @@ def main(argv):
     #finite_diff() # Calc and plot concentration profiles, finite differences
     #Plate_thickness()
     fin_diff(T_low,T_hi,0.7)
+    #fin_diff(T_low,T_low,0.0)
     #plt.show()
-#    fin_diff_wLin_Temp_profile_Cu() # Calc and plot concentration profile for Cu, linear temp. increase
     
-#    stabilityCheck(analytical,fin_diff) # Comparison analytical and finite differences
-#    print("--- %s seconds ---" % (time.time() - start_time))
+#   stabilityCheck(analytical,fin_diff) # Comparison analytical and finite differences
+#   print("--- %s seconds ---" % (time.time() - start_time))
     
 if __name__ == "__main__":
     main(sys.argv[1:])
