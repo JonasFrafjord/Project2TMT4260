@@ -128,6 +128,11 @@ def createSparse(DTemp1, D_ZT):
     sub = [alpha*DTemp1/D_ZT*(1-(1/(i+1))) for i in range(N)] 
     diag = np.zeros(N+1)+(1-2*alpha*DTemp1/D_ZT)  # diagonal
     return scipy.sparse.diags(np.array([sub,diag,sup]), [-1,0,1])
+def createSparse(DTemp1, D_ZT):
+    sup = [alpha*DTemp1/D_ZT*(1) for i in range(N)]    # sub and super is non-equivalent for this finite difference scheme
+    sub = [alpha*DTemp1/D_ZT*(1) for i in range(N)] 
+    diag = np.zeros(N+1)+(1-2*alpha*DTemp1/D_ZT)  # diagonal
+    return scipy.sparse.diags(np.array([sub,diag,sup]), [-1,0,1])
 
 # Calculation of new concentration profile per time increment
 def nextTime(CVecT, AMatT):
@@ -155,16 +160,16 @@ def fin_diff(T1,T2,RSR_ch):
     i_time = 0
     C_i_RSR = C_i_f(T_RSR)
     k_RSR = k_f(C_i_RSR)
-
-
-    # Temporal discretisation
+    
+# Temporal discretisation
     dt = alpha*dx**2/D_Z       # D_hi will give the lowest dt, use it to be sure we respect the stability criterion
     Nt = math.ceil(t_i/dt)
     t = np.linspace(0, t_i, Nt+1) # Mesh points in time
     
     # Create initial concentration vectors
     index_cutoff = round(r_0/dx)
-    U = np.append(np.zeros(index_cutoff)+C_p,np.zeros(N-index_cutoff+1)+C_0)
+ #   U = np.append(np.zeros(index_cutoff)+C_p,np.zeros(N-index_cutoff+1)+C_0)
+    U = np.zeros(N+1)+C_0
     U[index_cutoff] = C_i_RSR
 
     # Create diag, sub and super diag for tridiag
@@ -225,7 +230,7 @@ def main(argv):
     fin_diff(T_low,T_low,0.3)
 #    fin_diff(T_low,T_hi,0.3)
  #   NextBnum()
-    #plt.show()
+    plt.show()
 #    fin_diff_wLin_Temp_profile_Cu() # Calc and plot concentration profile for Cu, linear temp. increase
 #    stabilityCheck(analytical,fin_diff) # Comparison analytical and finite differences
 #    print("--- %s seconds ---" % (time.time() - start_time))
