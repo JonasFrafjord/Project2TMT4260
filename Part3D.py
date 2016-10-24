@@ -91,7 +91,12 @@ def R_f(k,t,D,r_init):
 def VolFrac(k_temp,t_temp,D_temp,r_init):
     if k_temp*D_temp*t_temp/r_init**2>1: return 0
     return (1.0 - k_temp*D_temp*t_temp/r_init**2)**(3.0/2.0)  
-
+def VolFrac(t_temp, t_s, t_star_prev_temp, t_star_temp):
+    r_temp = (1-t_s/t_star_prev_temp+(t_temp-t_s)/t_star_temp)**(3/2)
+    if r_temp < 0: return 0
+    return r_temp
+def t_star_f(r_temp, k_temp, D_temp):
+    return r_0**2*pi/D_temp/k_temp**2
 def CAnal(r,R,T,D,t,C_i_T):
     if((r-dx/2) <= R):
         return C_p
@@ -129,18 +134,29 @@ def createSparse(DTemp1, D_ZT, R_temp):
     sub = [alpha*DTemp1/D_ZT*(1-(1/(i+R_temp/dx))) for i in range(N)] 
     diag = np.zeros(N+1)+(1-2*alpha*DTemp1/D_ZT)  # diagonal
     return scipy.sparse.diags(np.array([sub,diag,sup]), [-1,0,1])
+# Create diagonal and sub/super diagonal for tridiagonal sparse matrix
+def createSpars111e(DTemp1, D_ZT, R_temp):
+    sup = [alpha*DTemp1/D_ZT for i in range(N)]    # sub and super is non-equivalent for this finite difference scheme
+    sub = [alpha*DTemp1/D_ZT*(1-0*(1/(i+R_temp/dx))) for i in range(N)] 
+    diag = np.zeros(N+1)+(1-2*alpha*DTemp1/D_ZT)  # diagonal
+    return scipy.sparse.diags(np.array([sub,diag,sup]), [-1,0,1])
 
 # Calculation of new concentration profile per time increment (sparse matrix) 
 def nextTimeSparse(CVecT, ASparseT):
     return CVecT*ASparseT
-
+def nextTimeBruteForce(U_prev,R_n):
+    U_temp = np.zeros(N+1)
+    for i in range(N):
+        if i ==0: continue
+        U_temp[i] = U_prev[i-1]*alpha*(1-1/(i+R_n/dx)) + U_prev[i]*(1.0-2.0*alpha)  + U_prev[i+1]*alpha*(1+1/(i+R_n/dx))
+    return U_temp
 def Betta(C_i_temp, C_pos):
     return (C_pos-C_i_temp)/dx
-def NextR(D_temp, dt_temp, C_i_temp, B_prev,Betta_temp):
-    B_temp = B_prev + dt_temp*D_temp/(C_p-C_i_temp)*Betta_temp
-    if B_temp < 0:
+def NextR(D_temp, dt_temp, C_i_temp, r_prev,Betta_temp):
+    r_temp = r_prev + dt_temp*D_temp/(C_p-C_i_temp)*Betta_temp
+    if r_temp < 0:
         return 0
-    return B_temp
+    return r_temp
 
 def fin_diff(T1,T2,RSR_ch):
     if T1==T2:
@@ -161,7 +177,9 @@ def fin_diff(T1,T2,RSR_ch):
     i_time = 0
     C_i_RSR = C_i_f(T_RSR)
     k_RSR = k_f(C_i_RSR)   
-    
+    t_star = t_star_f(r_0, k_RSR, D_RSR)
+    t_star_prev = 1.0
+    t_switch = 0
     print('D_RSR: {0:.3e}'.format(D_RSR))
     print('R_RSR: {0:.3e}'.format(R_RSR))
     print('T_RSR: {0:.3e}'.format(T_RSR))
@@ -200,17 +218,22 @@ def fin_diff(T1,T2,RSR_ch):
     VF_num = np.zeros(np.size(t))
     VF_num[0] = 1.0
     VF_isokin = np.zeros(np.size(t))      
-    
+#    print(r_0**2/k_RSR/D_RSR)
+#    exit()
     for i in range(Nt):
-        U = nextTimeSparse(U, Sparse)
+        U = nextTimeBruteForce(U,RSR_num[i])
+#        U = nextTimeSparse(U, Sparse)
         
         # Insert boundary conditions  
  #       U[0:index_cutoff] = C_p
         U[index_cutoff] = C_i_RSR
         U[N] = 0
+        VF_iso_temp = VolFrac(dt*i,t_switch, t_star_prev,t_star)
         RSR_anal[i] = R_f(k_RSR,dt*i_time,D_RSR,R_RSR)
         Betta_temp = (U[1]-U[0])/dx
-        VF_iso_temp = VolFrac(k_RSR,dt*i_time,D_RSR,R_RSR)
+#        if i == 9000: exit()
+#        if i%500 == 0: print(Betta_temp)
+#        VF_iso_temp = VolFrac(k_RSR,dt*i_time,D_RSR,R_RSR)
  #       if(i==1000 and False):
  #           #break
  #           print('Printing concentration first few elements after %d iterations\n' % i)
@@ -222,40 +245,46 @@ def fin_diff(T1,T2,RSR_ch):
             T_RSR = T2
             C_i_RSR = C_i_f(T_RSR)
             k_RSR = k_f(C_i_RSR)
-            R_RSR = RSR_num_temp
+            #R_RSR = RSR_num_temp
+            t_switch = i*dt
+            t_star_prev = t_star
+            t_star = t_star_f(r_0, k_RSR, D_RSR)
             i_time = 0 # Fix for two-step
             ShouldChange = False
-            Sparse = createSparse(D_2,D_Z)
+            #Sparse = createSparse(D_2,D_Z)
         if (VF_iso_temp > 0):
             VF_isokin[i] = VF_iso_temp
  #       if (RSR_num_temp > 0):
             VF_num[i]= (RSR_num[i]/r_0)**3
         i_time = i_time +1
-        if i%1000 == 0:
-            plt.plot(x_bar,U)
-        if(i == Nt): break
+ #       if i%10000 == 0:# and i<10001:
+ #           plt.plot(x_bar,U)
+ #       if(i == Nt): break
         RSR_num[i+1] = NextR(D_RSR,dt,C_i_RSR,RSR_num[i],Betta_temp)
-        Sparse=createSparse(D_RSR, D_Z, RSR_num[i+1])
-        if i == 1000 and False:
-            print(RSR_num[i+1]/r_0)
-            exit()
-        
+ #       print(RSR_num[i+1])
+ #       if i == 10:exit()
+#        Sparse=createSparse(D_RSR, D_Z, RSR_num[i+1])
+#        if i==0: print(alpha*U[0]-alpha*U[0]/(r_0/dx+1))
+#        if i%1==0 and i < 100 and True:
+#            print(U[0],U[1],U[2],U[3])
+#        if i==1001: xit()
         
     #plt.figure(figsize=(14,10), dpi=120)
     #plt.plot(x_bar,U,label='Numerical')
     #plt.ylim(0.0,1.0)
         
-    plt.figure(figsize=(14,10), dpi=120)    
-    C_i_T = C_i_f(T_i)
-    D_i = Diffusivity(T_i)
-    Conc = [CAnal(i,r_0,T_i,D_i,t_i,C_i_T) for i in x_bar]
-    plt.plot(x_bar,Conc,label='Isokinetic') #label='Si'
-    plt.plot(x_bar,U,',',label='Numerical')
-    plt.ylim(0,1.1)
+#    plt.figure(figsize=(14,10), dpi=120)    
+#    C_i_T = C_i_f(T_i)
+#    D_i = Diffusivity(T_i)
+#    Conc = [CAnal(i,r_0,T_i,D_i,t_i,C_i_T) for i in x_bar]
+#    plt.plot(x_bar,Conc,label='Isokinetic') #label='Si'
+#    x_barV2 = np.linspace(r_0,L+r_0,N+1)
+#    plt.plot(x_barV2,U,'o',label='Numerical')
+#    plt.ylim(0,1.1)
 #    plt.plot((0.0,L), (C_i_T, C_i_T), 'k-') # (x0,x1)(y0,y1)
-    plt.title('Concentration profile after %d seconds annealing at two-step %d K and %d K temperature change' % (t_i,T1,T2))
-    plt.legend()
-    plt.rcParams.update({'font.size': 18})
+#    plt.title('Concentration profile after %d seconds annealing at two-step %d K and %d K temperature change' % (t_i,T1,T2))
+#    plt.legend()
+#    plt.rcParams.update({'font.size': 18})
     
     #plt.figure()
     #plt.plot(t,RSR_num[:Nt:1,'r-')
@@ -307,7 +336,7 @@ def main(argv):
  #   analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
  #   finite_diff() # Calc and plot concentration profiles, finite differences
     #Plate_thickness()    
-    fin_diff(T_low,T_low,0.3)
+    fin_diff(T_low,T_hi,0.3)
 #    fin_diff(T_low,T_hi,0.3)
  #   NextBnum()
     plt.show()
