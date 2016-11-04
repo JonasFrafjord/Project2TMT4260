@@ -46,14 +46,17 @@ C_p=1.0e2 # [wt.%]
 C_0=0.0  # [wt.%]      
 
 "Spatial and temporal discretisation"
-N = 300 # Number of spacial partitions of bar
+N = 600 # Number of spacial partitions of bar
 L = 1.5 # [um] Length of bar 
-t_i = 15 # seconds for isothermal annealing
+t_i = 10 # seconds for isothermal annealing
 x_bar = np.linspace(0,L,N+1)
 dx = L/N   # Need N+1 x points, where [N/2] is centered in a 0-indexed array
 # The stability criterion for the explicit finite difference scheme must be fulfilled
 alpha = .4  # alpha = D*dt/dx**2 --> Const in discretisation --> Must be <= 0.5 if used to find dt
 
+
+#How often should the Sparse matrix be updated
+upSparse = 200
 
 "Precipitation of pure Si particles in a binary Al-Si alloy, assuming a diluted Al matrix."
 # Calculating and plotting concentration profile for the spatial range [0,L] um after t_i s annealing at T_i deg C
@@ -128,21 +131,15 @@ def AnalConc():
     
 # Create diagonal and sub/super diagonal for tridiagonal sparse matrix, 3D case
 def createSparse(DTemp1, D, R_temp):
+    if R_temp == 0: R_temp = 1e-8 #Avoid divide by 0
     sup = [alpha*DTemp1/D*(1+(1/(i+R_temp/dx))) for i in range(N)] # sub and super diag. is non-equivalent for this finite difference scheme
-    sub = [alpha*DTemp1/D*(1-(1/(i+R_temp/dx))) for i in range(N)] 
+    sub = [alpha*DTemp1/D*(1-(1/(1+i+R_temp/dx))) for i in range(N)] 
     diag = np.zeros(N+1)+(1-2*alpha*DTemp1/D) # diagonal
     return scipy.sparse.diags(np.array([sub,diag,sup]), [-1,0,1])
     
-# Create diagonal and sub/super diagonal for tridiagonal sparse matrix
-def createSpars111e(DTemp1, D, R_temp):
-    sup = [alpha*DTemp1/D for i in range(N)]
-    sub = [alpha*DTemp1/D*(1-0*(1/(i+R_temp/dx))) for i in range(N)] 
-    diag = np.zeros(N+1)+(1-2*alpha*DTemp1/D)  # diagonal
-    return scipy.sparse.diags(np.array([sub,diag,sup]), [-1,0,1])
-
 # Calculation of new concentration profile per time increment (sparse matrix) 
 def nextTimeSparse(CVecT, ASparseT):
-    return CVecT*ASparseT
+    return ASparseT*CVecT
     
 # Iterative brute force method    
 def nextTimeBruteForce(U_prev,R_n):
@@ -162,7 +159,7 @@ def NextR(D_temp, dt_temp, C_i_temp, r_prev,C_grad_interface_temp):
         return 0
     return r_temp
 
-def fin_diff(T1,T2,RSR_ch):
+def fin_diff(T1,T2,RSR_ch=-1): #RSR_ch is optinal
     if T1==T2:
         ShouldChange = False
     else:
@@ -233,8 +230,8 @@ def fin_diff(T1,T2,RSR_ch):
         # Solve for every timestep
         C_grad_interface_temp = C_grad_interface(U[index_cutoff+1],U[index_cutoff])
         # U = nextTimeBruteForce(U,RSR_num[i])
-        U = nextTimeBruteForce(U,RSR_num[i])
-        # U = nextTimeSparse(U, Sparse)
+        #U = nextTimeBruteForce(U,RSR_num[i])
+        U = nextTimeSparse(U, Sparse)
         
         # Insert boundary conditions  
         # U[0:index_cutoff] = C_p
@@ -285,7 +282,8 @@ def fin_diff(T1,T2,RSR_ch):
         RSR_num[i+1] = NextR(D_RSR,dt,C_i_RSR,RSR_num[i],C_grad_interface_temp)
  #       print(RSR_num[i+1])
  #       if i == 10:exit()
-#        Sparse=createSparse(D_RSR, D_max, RSR_num[i+1])
+        if i%upSparse == 0:
+            Sparse=createSparse(D_RSR, D_max, RSR_num[i+1])
 #        if i==0: print(alpha*U[0]-alpha*U[0]/(r_0/dx+1))
 #        if i%1==0 and i < 100 and True:
 #            print(U[0],U[1],U[2],U[3])
@@ -294,25 +292,24 @@ def fin_diff(T1,T2,RSR_ch):
     #plt.figure(figsize=(14,10), dpi=120)
     #plt.plot(x_bar,U,label='Numerical')
     #plt.ylim(0.0,1.0)
-        
-    plt.figure(figsize=(14,10), dpi=120)    
-    C_i_T = C_i_f(T_i)
-    D_i = Diffusivity(T_i)
-    Conc = [CAnal(i,r_0,T_i,D_i,t_i,C_i_T) for i in x_bar]
-    plt.plot(x_bar,Conc,label='Analytical')
-    x_barV2 = np.linspace(r_0,L+r_0,N+1)
-    plt.plot(x_barV2[::5],U[::5],'o',label='Numerical')
-    plt.ylim(0,1.0)
-    plt.xlim(0,L/2)
-    plt.xlabel('r [um]')
-    plt.ylabel('Concentration of Si [wt.%]')
-    plt.title('Concentration profile near spherical Si-particle in Al-Si after isothermal annealing at {0:.0f} K'.format(T_i),y=1.02)
-    plt.legend()
-    plt.rcParams.update({'font.size': 18})  
+    if False: #change to True for more plots    
+        plt.figure(figsize=(14,10), dpi=120)    
+        C_i_T = C_i_f(T_i)
+        D_i = Diffusivity(T_i)
+        Conc = [CAnal(i,r_0,T_i,D_i,t_i,C_i_T) for i in x_bar]
+        plt.plot(x_bar,Conc,label='Analytical')
+        x_barV2 = np.linspace(r_0,L+r_0,N+1)
+        plt.plot(x_barV2[::5],U[::5],'o',label='Numerical')
+        plt.ylim(0,1.0)
+        plt.xlim(0,L/2)
+        plt.xlabel('r [um]')
+        plt.ylabel('Concentration of Si [wt.%]')
+        plt.title('Concentration profile near spherical Si-particle in Al-Si after isothermal annealing at {0:.0f} K'.format(T_i),y=1.02)
+        plt.legend()
+        plt.rcParams.update({'font.size': 18})  
     #plt.plot((0.0,L), (C_i_T, C_i_T), 'k-') # (x0,x1)(y0,y1)
     #plt.title('Concentration profile after %d seconds annealing at two-step %d K and %d K temperature change' % (t_i,T1,T2)) 
- 
-    if True: 
+    if True:  #Change to True for more plots.
         plt.figure(figsize=(14,10), dpi=120)
         plt.plot(t,(RSR_num/r_0)**3,'b-',label='Numerical')
         #plt.plot(t,(RSR_anal)**3,'r-',label='Isokinetic')
@@ -324,7 +321,7 @@ def fin_diff(T1,T2,RSR_ch):
         plt.title('Scaled volume fraction after two-step annealing at %d K and %d K' % (T1,T2),y=1.03)
         plt.legend()
         plt.rcParams.update({'font.size': 18})    
-    
+    if False: # Change to True for more plots
         plt.figure(figsize=(14,10), dpi=120)
         #plt.plot(t,VF_num,'b-',label='Numerical')
         plt.plot(t,RVF_num_long/r_0,'b-',label='Isothermal-Numerical')
@@ -358,13 +355,14 @@ def fin_diff(T1,T2,RSR_ch):
         #plt.plot(t,RSR_num)
     
 def main(argv):
-    plt.figure(figsize=(14,10), dpi=120)
+#    plt.figure(figsize=(14,10), dpi=120)
 
     #analytical = AnalConc() # Calc and plot concentration profiles, analytical formula
  #   finite_diff() # Calc and plot concentration profiles, finite differences
     #Plate_thickness()    
     fin_diff(T_hi,T_low,0.3)
-    fin_diff(T_hi,T_low,0.7)
+ #   fin_diff(T_hi,T_low)
+#    fin_diff(T_hi,T_low,0.7)
  #   NextBnum()
     plt.show()
 #    fin_diff_wLin_Temp_profile_Cu() # Calc and plot concentration profile for Cu, linear temp. increase
